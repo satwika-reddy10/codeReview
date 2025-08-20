@@ -1,7 +1,10 @@
 import React from "react";
+import { Link, useNavigate } from 'react-router-dom';
 import "./LandingPage.css";
 
 const LandingPage = () => {
+  const navigate = useNavigate();
+
   return (
     <div className="landing-page">
       <div className="star-container">
@@ -33,7 +36,7 @@ const LandingPage = () => {
           <li><a href="#about">ABOUT US</a></li>
           <li><a href="#features">FEATURES</a></li>
           <li><a href="#contact">CONTACT</a></li>
-          <li><a href="C:\Users\Varshini Gopaldas\Desktop\Codereviewer\codeReview\frontend\src\components\LoginPage\LoginPage.jsx" className="login-nav">LOG IN</a></li>
+          <li><Link to="/login" className="login-nav">LOG IN</Link></li>
         </ul>
       </nav>
 
@@ -45,7 +48,7 @@ const LandingPage = () => {
             Simplify your code reviews with AI-powered insights.  
             Clean, secure, and efficient code at your fingertips.
           </p>
-          <button className="cta-btn">Get Started</button>
+          <button className="cta-btn" onClick={() => navigate('/login')}>Get Started</button>
         </div>
       </header>
 
