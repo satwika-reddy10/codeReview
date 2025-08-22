@@ -17,10 +17,24 @@ const SignupPage = ({ onToggleForm }) => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     // In a real application, you would handle the signup logic here (e.g., API call)
-    console.log('Signup attempted with:', formState);
+    try {
+      const response = await fetch('http://localhost:5000/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: formState.name, email: formState.email, password: formState.password }),
+      });
+      if (!response.ok) {
+        throw new Error('Signup failed');
+      }
+      const data = await response.json();
+      console.log('Signup successful:', data);
+      onToggleForm(); // Toggle back to login after successful signup
+    } catch (error) {
+      alert(error.message);
+    }
   };
 
   return (
