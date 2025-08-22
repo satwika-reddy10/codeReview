@@ -1,9 +1,11 @@
 // LoginPage.jsx
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './LoginPage.css';
 import SignupPage from './SignupPage'; // Import the new SignupPage component
 
 const LoginPage = () => {
+  const navigate = useNavigate();
   const [formState, setFormState] = useState({
     username: '',
     password: '',
@@ -19,11 +21,25 @@ const LoginPage = () => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (isLogin) {
       // Handle login logic
-      console.log('Login attempted with:', formState);
+      try {
+        const response = await fetch('http://localhost:5000/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: formState.username, password: formState.password }),
+        });
+        if (!response.ok) {
+          throw new Error('Login failed');
+        }
+        const data = await response.json();
+        console.log('Login successful:', data);
+        navigate('/submit');
+      } catch (error) {
+        alert(error.message);
+      }
     } else {
       // Handle signup logic
       console.log('Signup attempted with:', formState);
