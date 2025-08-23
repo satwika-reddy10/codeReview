@@ -1,8 +1,7 @@
-// LoginPage.jsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './LoginPage.css';
-import SignupPage from './SignupPage'; // Import the new SignupPage component
+import SignupPage from './SignupPage';
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -10,7 +9,6 @@ const LoginPage = () => {
     username: '',
     password: '',
   });
-
   const [isLogin, setIsLogin] = useState(true);
 
   const handleChange = (e) => {
@@ -23,26 +21,33 @@ const LoginPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (isLogin) {
-      // Handle login logic
-      try {
-        const response = await fetch('http://localhost:5000/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: formState.username, password: formState.password }),
-        });
-        if (!response.ok) {
-          throw new Error('Login failed');
-        }
-        const data = await response.json();
-        console.log('Login successful:', data);
-        navigate('/submit');
-      } catch (error) {
-        alert(error.message);
+    if (!formState.username) {
+      alert('Please enter a valid email address');
+      return;
+    }
+    if (!formState.password) {
+      alert('Please enter a password');
+      return;
+    }
+    if (formState.password.length < 8) {
+      alert('Password must be at least 8 characters long');
+      return;
+    }
+    try {
+      const response = await fetch('http://localhost:5000/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: formState.username, password: formState.password }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Login failed');
       }
-    } else {
-      // Handle signup logic
-      console.log('Signup attempted with:', formState);
+      const data = await response.json();
+      console.log('Login successful:', data);
+      navigate('/submit');
+    } catch (error) {
+      alert(`Error: ${error.message}`);
     }
   };
 
@@ -68,12 +73,12 @@ const LoginPage = () => {
               <h2>Log in</h2>
               <form onSubmit={handleSubmit}>
                 <div className="input-group">
-                  <label htmlFor="username">Username</label>
+                  <label htmlFor="username">Username (Email)</label>
                   <input
                     id="username"
-                    type="text"
+                    type="email"
                     name="username"
-                    placeholder="Enter your username"
+                    placeholder="example@gmail.com"
                     value={formState.username}
                     onChange={handleChange}
                   />
@@ -84,7 +89,7 @@ const LoginPage = () => {
                     id="password"
                     type="password"
                     name="password"
-                    placeholder="Enter your password"
+                    placeholder="At least 8 characters"
                     value={formState.password}
                     onChange={handleChange}
                   />

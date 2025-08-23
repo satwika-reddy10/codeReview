@@ -1,10 +1,8 @@
-// SignupPage.jsx
 import React, { useState } from 'react';
 
 const SignupPage = ({ onToggleForm }) => {
   const [formState, setFormState] = useState({
-    name: '',
-    email: '',
+    username: '',
     password: '',
     dob: ''
   });
@@ -19,21 +17,33 @@ const SignupPage = ({ onToggleForm }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // In a real application, you would handle the signup logic here (e.g., API call)
+    if (!formState.username) {
+      alert('Please enter a valid email address');
+      return;
+    }
+    if (!formState.password) {
+      alert('Please enter a password');
+      return;
+    }
+    if (formState.password.length < 8) {
+      alert('Password must be at least 8 characters long');
+      return;
+    }
     try {
       const response = await fetch('http://localhost:5000/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: formState.name, email: formState.email, password: formState.password }),
+        body: JSON.stringify({ username: formState.username, password: formState.password }),
       });
       if (!response.ok) {
-        throw new Error('Signup failed');
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Signup failed');
       }
       const data = await response.json();
       console.log('Signup successful:', data);
-      onToggleForm(); // Toggle back to login after successful signup
+      onToggleForm();
     } catch (error) {
-      alert(error.message);
+      alert(`Error: ${error.message}`);
     }
   };
 
@@ -45,24 +55,13 @@ const SignupPage = ({ onToggleForm }) => {
       </p>
       <form onSubmit={handleSubmit}>
         <div className="input-group">
-          <label htmlFor="name">NAME</label>
+          <label htmlFor="username">EMAIL</label>
           <input
-            id="name"
-            type="text"
-            name="name"
-            placeholder="abc"
-            value={formState.name}
-            onChange={handleChange}
-          />
-        </div>
-        <div className="input-group">
-          <label htmlFor="email">EMAIL</label>
-          <input
-            id="email"
+            id="username"
             type="email"
-            name="email"
+            name="username"
             placeholder="example@gmail.com"
-            value={formState.email}
+            value={formState.username}
             onChange={handleChange}
           />
         </div>
@@ -72,8 +71,18 @@ const SignupPage = ({ onToggleForm }) => {
             id="password"
             type="password"
             name="password"
-            placeholder="*******"
+            placeholder="At least 8 characters"
             value={formState.password}
+            onChange={handleChange}
+          />
+        </div>
+        <div className="input-group">
+          <label htmlFor="dob">DATE OF BIRTH</label>
+          <input
+            id="dob"
+            type="date"
+            name="dob"
+            value={formState.dob}
             onChange={handleChange}
           />
         </div>
