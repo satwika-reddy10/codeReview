@@ -13,7 +13,13 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:mypassword@local
 
 # Database Configuration
 try:
-    engine = create_engine(DATABASE_URL, pool_size=5, max_overflow=10, pool_timeout=30)
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=5,
+        max_overflow=10,
+        pool_timeout=30,
+        connect_args={"sslmode": "require"}  # 👈 force SSL for Supabase
+    )
     SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
     Base = declarative_base()
 except Exception as e:
