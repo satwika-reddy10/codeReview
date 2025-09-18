@@ -247,31 +247,6 @@
   outline: none;
 }
 
-.suggestion-text:disabled {
-  background: rgba(0, 0, 0, 0.5);
-  color: #aaa;
-  cursor: not-allowed;
-}
-
-.suggestion-status {
-  font-size: 12px;
-  font-weight: 500;
-  margin: 8px 0;
-  padding: 4px 8px;
-  border-radius: 4px;
-  display: inline-block;
-}
-
-.suggestion-status.accepted {
-  background: rgba(46, 139, 87, 0.2);
-  color: #38a169;
-}
-
-.suggestion-status.rejected {
-  background: rgba(197, 48, 48, 0.2);
-  color: #e53e3e;
-}
-
 .suggestion-actions {
   display: flex;
   gap: 8px;
@@ -353,18 +328,12 @@
   transition: all 0.3s ease;
 }
 
-.action-button:disabled {
-  background: rgba(255, 255, 255, 0.1);
-  color: #aaa;
-  cursor: not-allowed;
-}
-
 .action-button.accept {
   background: #2f855a;
   color: #fff;
 }
 
-.action-button.accept:hover:not(:disabled) {
+.action-button.accept:hover {
   background: #38a169;
 }
 
@@ -373,7 +342,7 @@
   color: #fff;
 }
 
-.action-button.reject:hover:not(:disabled) {
+.action-button.reject:hover {
   background: #e53e3e;
 }
 
@@ -382,7 +351,7 @@
   color: #fff;
 }
 
-.action-button.modify:hover:not(:disabled) {
+.action-button.modify:hover {
   background: #d69e2e;
 }
 

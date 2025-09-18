@@ -4,7 +4,7 @@ import './SubmitPage.css';
 
 const SubmitPage = () => {
   const [userCode, setUserCode] = useState('');
-  const [selectedLanguage, setSelectedLanguage] = useState('javascript');
+  const [editorLanguage, setEditorLanguage] = useState('javascript');
   const [aiSuggestions, setAiSuggestions] = useState([
     { id: 1, text: '// Consider adding error handling', modifiedText: '', rejectReason: '', status: null },
     { id: 2, text: '// Optimize this loop for better performance', modifiedText: '', rejectReason: '', status: null },
@@ -41,7 +41,7 @@ const SubmitPage = () => {
         java: 'java',
       };
       const language = languageMap[extension] || 'javascript';
-      setSelectedLanguage(language);
+      setEditorLanguage(language);
 
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -51,13 +51,9 @@ const SubmitPage = () => {
     }
   };
 
-  const handleLanguageChange = (event) => {
-    setSelectedLanguage(event.target.value);
-  };
-
   const handleSubmitCode = () => {
-    // TODO: Integrate with AI to generate suggestions based on userCode and selectedLanguage
-    console.log('Submitting code for AI suggestions:', userCode, selectedLanguage);
+    // TODO: Integrate with AI to generate suggestions based on userCode and editorLanguage
+    console.log('Submitting code for AI suggestions:', userCode, editorLanguage);
     setAiSuggestions((prev) => [
       ...prev,
       { id: prev.length + 1, text: '// New AI suggestion', modifiedText: '', rejectReason: '', status: null },
@@ -110,6 +106,13 @@ const SubmitPage = () => {
     );
   };
 
+  const rejectionReasons = [
+    'Not applicable',
+    'Too complex',
+    'Incorrect suggestion',
+    'Other',
+  ];
+
   return (
     <div className="submit-page">
       <div className="star-container">
@@ -129,16 +132,6 @@ const SubmitPage = () => {
         <div className={`editor-container left-editor ${animate ? 'slide-in-left' : ''}`}>
           <h3>Paste or Upload Your Code</h3>
           <div className="editor-controls">
-            <select
-              value={selectedLanguage}
-              onChange={handleLanguageChange}
-              className="language-select"
-            >
-              <option value="javascript">JavaScript</option>
-              <option value="python">Python</option>
-              <option value="c">C</option>
-              <option value="java">Java</option>
-            </select>
             <label className="file-upload-button">
               <input
                 type="file"
@@ -173,7 +166,7 @@ const SubmitPage = () => {
             <Suspense fallback={<div>Loading editor...</div>}>
               <Editor
                 height="50vh"
-                language={selectedLanguage}
+                language={editorLanguage}
                 value={userCode}
                 onChange={handleUserCodeChange}
                 theme="vs-dark"
@@ -208,6 +201,9 @@ const SubmitPage = () => {
                   {suggestion.status && (
                     <div className={`suggestion-status ${suggestion.status.toLowerCase()}`}>
                       {suggestion.status}
+                      {suggestion.status === 'Rejected' && suggestion.rejectReason && (
+                        <span className="reject-reason"> ({suggestion.rejectReason})</span>
+                      )}
                     </div>
                   )}
                   <div className="suggestion-actions">
@@ -240,17 +236,24 @@ const SubmitPage = () => {
                   </div>
                   {activeRejectId === suggestion.id && !suggestion.status && (
                     <div className="reject-reason-container">
-                      <textarea
+                      <select
                         value={suggestion.rejectReason}
                         onChange={(e) =>
                           handleRejectReasonChange(suggestion.id, e.target.value)
                         }
-                        className="reject-reason-text"
-                        placeholder="Enter reason for rejection"
-                      />
+                        className="reject-reason-select"
+                      >
+                        <option value="">Select a reason</option>
+                        {rejectionReasons.map((reason) => (
+                          <option key={reason} value={reason}>
+                            {reason}
+                          </option>
+                        ))}
+                      </select>
                       <button
                         onClick={() => handleConfirmReject(suggestion.id)}
                         className="confirm-reject-button"
+                        disabled={!suggestion.rejectReason}
                       >
                         Confirm Reject
                       </button>
