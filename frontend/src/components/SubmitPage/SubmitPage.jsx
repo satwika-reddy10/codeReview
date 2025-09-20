@@ -5,13 +5,14 @@ import './SubmitPage.css';
 const SubmitPage = () => {
   const [userCode, setUserCode] = useState('');
   const [editorLanguage, setEditorLanguage] = useState('javascript');
+  const [selectedLanguage, setSelectedLanguage] = useState('javascript');
   const [aiSuggestions, setAiSuggestions] = useState([
-    { id: 1, text: '// Consider adding error handling', modifiedText: '', rejectReason: '', status: null },
-    { id: 2, text: '// Optimize this loop for better performance', modifiedText: '', rejectReason: '', status: null },
+    { id: 1, text: 'Submit your code to get AI suggestions', modifiedText: '', rejectReason: '', status: null },
   ]);
   const [animate, setAnimate] = useState(false);
   const [showAcceptMessage, setShowAcceptMessage] = useState(false);
   const [activeRejectId, setActiveRejectId] = useState(null);
+  const [sessionId, setSessionId] = useState(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setAnimate(true), 100);
@@ -25,9 +26,12 @@ const SubmitPage = () => {
     }
   }, [showAcceptMessage]);
 
+  const generateNewSessionId = () => {
+    return Math.random().toString(36).substr(2, 9);
+  };
+
   const handleUserCodeChange = (value) => {
     setUserCode(value);
-    // TODO: Integrate with AI to generate suggestions and setAiSuggestions
   };
 
   const handleFileUpload = (event) => {
@@ -36,12 +40,24 @@ const SubmitPage = () => {
       const extension = file.name.split('.').pop().toLowerCase();
       const languageMap = {
         js: 'javascript',
+        jsx: 'javascript',
+        ts: 'typescript',
+        tsx: 'typescript',
         py: 'python',
         c: 'c',
+        cpp: 'cpp',
         java: 'java',
+        html: 'html',
+        css: 'css',
+        php: 'php',
+        rb: 'ruby',
+        go: 'go',
+        rs: 'rust',
+        cs: 'csharp',
       };
       const language = languageMap[extension] || 'javascript';
       setEditorLanguage(language);
+      setSelectedLanguage(language); // Sync dropdown with file language
 
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -51,19 +67,91 @@ const SubmitPage = () => {
     }
   };
 
-  const handleSubmitCode = () => {
-    // TODO: Integrate with AI to generate suggestions based on userCode and editorLanguage
-    console.log('Submitting code for AI suggestions:', userCode, editorLanguage);
-    setAiSuggestions((prev) => [
-      ...prev,
-      { id: prev.length + 1, text: '// New AI suggestion', modifiedText: '', rejectReason: '', status: null },
-    ]);
+  const handleSubmitCode = async () => {
+    // Generate new session ID on each submit
+    const newSessionId = generateNewSessionId();
+    setSessionId(newSessionId);
+    
+    // Set editor language to selected language
+    setEditorLanguage(selectedLanguage);
+    
+    try {
+      // Show loading state
+      setAiSuggestions([{ 
+        id: 1, 
+        text: 'Analyzing your code...', 
+        modifiedText: '', 
+        rejectReason: '', 
+        status: 'loading' 
+      }]);
+      
+      const response = await fetch("http://localhost:8000/generate-suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          code: userCode, 
+          language: selectedLanguage, // Use selected language instead of editor language
+          session_id: newSessionId
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.suggestions && data.suggestions.length > 0) {
+        setAiSuggestions(data.suggestions);
+      } else {
+        setAiSuggestions([{ 
+          id: 1, 
+          text: 'No specific suggestions found. Your code looks good!', 
+          modifiedText: '', 
+          rejectReason: '', 
+          status: null 
+        }]);
+      }
+    } catch (error) {
+      console.error("Error fetching suggestions:", error);
+      setAiSuggestions([{ 
+        id: 1, 
+        text: `Error: ${error.message}. Please try again.`, 
+        modifiedText: '', 
+        rejectReason: '', 
+        status: 'error' 
+      }]);
+    }
   };
 
-  const handleAcceptSuggestion = (suggestionId) => {
+  const handleAcceptSuggestion = async (suggestionId) => {
     const suggestion = aiSuggestions.find((s) => s.id === suggestionId);
     if (suggestion) {
-      setUserCode((prev) => prev + '\n' + (suggestion.modifiedText || suggestion.text));
+      // Send acceptance to backend to get the modified code
+      try {
+        const response = await fetch("http://localhost:8000/accept-suggestion", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            session_id: sessionId,
+            suggestion_id: suggestionId,
+            suggestion_text: suggestion.text,
+            modified_text: suggestion.modifiedText || suggestion.text,
+            language: selectedLanguage,
+            original_code: userCode
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.modified_code) {
+            setUserCode(data.modified_code);
+          }
+        }
+      } catch (error) {
+        console.error("Error accepting suggestion:", error);
+      }
+
       setAiSuggestions((prev) =>
         prev.map((s) =>
           s.id === suggestionId ? { ...s, status: 'Accepted' } : s
@@ -77,10 +165,26 @@ const SubmitPage = () => {
     setActiveRejectId(suggestionId);
   };
 
-  const handleConfirmReject = (suggestionId) => {
+  const handleConfirmReject = async (suggestionId) => {
     const suggestion = aiSuggestions.find((s) => s.id === suggestionId);
     if (suggestion) {
-      console.log(`Rejected suggestion ${suggestionId} with reason: ${suggestion.rejectReason}`);
+      // Send rejection to backend
+      try {
+        await fetch("http://localhost:8000/reject-suggestion", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            session_id: sessionId,
+            suggestion_id: suggestionId,
+            suggestion_text: suggestion.text,
+            reject_reason: suggestion.rejectReason,
+            language: selectedLanguage
+          }),
+        });
+      } catch (error) {
+        console.error("Error rejecting suggestion:", error);
+      }
+
       setAiSuggestions((prev) =>
         prev.map((s) =>
           s.id === suggestionId ? { ...s, status: 'Rejected' } : s
@@ -98,12 +202,39 @@ const SubmitPage = () => {
     );
   };
 
-  const handleModifySuggestion = (suggestionId, newText) => {
-    setAiSuggestions((prev) =>
-      prev.map((s) =>
-        s.id === suggestionId ? { ...s, modifiedText: newText } : s
-      )
-    );
+  const handleModifySuggestion = async (suggestionId, newText) => {
+    const suggestion = aiSuggestions.find((s) => s.id === suggestionId);
+    if (suggestion) {
+      // Send modification request to backend
+      try {
+        const response = await fetch("http://localhost:8000/modify-suggestion", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            session_id: sessionId,
+            suggestion_id: suggestionId,
+            original_text: suggestion.text,
+            modified_text: newText,
+            language: selectedLanguage
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setAiSuggestions((prev) =>
+            prev.map((s) =>
+              s.id === suggestionId ? { ...s, modifiedText: data.modified_suggestion } : s
+            )
+          );
+        }
+      } catch (error) {
+        console.error("Error modifying suggestion:", error);
+      }
+    }
+  };
+
+  const handleLanguageChange = (event) => {
+    setSelectedLanguage(event.target.value);
   };
 
   const rejectionReasons = [
@@ -111,6 +242,22 @@ const SubmitPage = () => {
     'Too complex',
     'Incorrect suggestion',
     'Other',
+  ];
+
+  const languageOptions = [
+    { value: 'python', label: 'Python' },
+    { value: 'javascript', label: 'JavaScript' },
+    { value: 'java', label: 'Java' },
+    { value: 'cpp', label: 'C++' },
+    { value: 'c', label: 'C' },
+    { value: 'csharp', label: 'C#' },
+    { value: 'typescript', label: 'TypeScript' },
+    { value: 'html', label: 'HTML' },
+    { value: 'css', label: 'CSS' },
+    { value: 'php', label: 'PHP' },
+    { value: 'ruby', label: 'Ruby' },
+    { value: 'go', label: 'Go' },
+    { value: 'rust', label: 'Rust' },
   ];
 
   return (
@@ -132,10 +279,25 @@ const SubmitPage = () => {
         <div className={`editor-container left-editor ${animate ? 'slide-in-left' : ''}`}>
           <h3>Paste or Upload Your Code</h3>
           <div className="editor-controls">
+            <div className="language-selector">
+              <label htmlFor="language-select">Language:</label>
+              <select
+                id="language-select"
+                value={selectedLanguage}
+                onChange={handleLanguageChange}
+                className="language-dropdown"
+              >
+                {languageOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <label className="file-upload-button">
               <input
                 type="file"
-                accept=".js,.py,.c,.java"
+                accept=".js,.jsx,.ts,.tsx,.py,.c,.cpp,.java,.html,.css,.php,.rb,.go,.rs,.cs"
                 onChange={handleFileUpload}
                 className="file-upload"
               />
@@ -210,14 +372,14 @@ const SubmitPage = () => {
                     <button
                       onClick={() => handleAcceptSuggestion(suggestion.id)}
                       className="action-button accept"
-                      disabled={!!suggestion.status}
+                      disabled={!!suggestion.status || suggestion.status === 'loading' || suggestion.status === 'error'}
                     >
                       Accept
                     </button>
                     <button
                       onClick={() => handleRejectSuggestion(suggestion.id)}
                       className="action-button reject"
-                      disabled={!!suggestion.status}
+                      disabled={!!suggestion.status || suggestion.status === 'loading' || suggestion.status === 'error'}
                     >
                       Reject
                     </button>
@@ -229,7 +391,7 @@ const SubmitPage = () => {
                         )
                       }
                       className="action-button modify"
-                      disabled={!!suggestion.status}
+                      disabled={!!suggestion.status || suggestion.status === 'loading' || suggestion.status === 'error'}
                     >
                       Modify
                     </button>
