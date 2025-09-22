@@ -1,18 +1,23 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, useRef } from 'react';
 import { Editor } from '@monaco-editor/react';
+import { Link } from 'react-router-dom';
+import * as monacoEditor from 'monaco-editor';
 import './SubmitPage.css';
 
 const SubmitPage = () => {
   const [userCode, setUserCode] = useState('');
+  const [modifiedCode, setModifiedCode] = useState('');
   const [editorLanguage, setEditorLanguage] = useState('javascript');
   const [selectedLanguage, setSelectedLanguage] = useState('javascript');
   const [aiSuggestions, setAiSuggestions] = useState([
-    { id: 1, text: 'Submit your code to get AI suggestions', modifiedText: '', rejectReason: '', status: null },
+    { id: 1, text: 'Submit your code to get AI suggestions', modifiedText: '', rejectReason: '', status: null, loadingAction: null },
   ]);
   const [animate, setAnimate] = useState(false);
   const [showAcceptMessage, setShowAcceptMessage] = useState(false);
   const [activeRejectId, setActiveRejectId] = useState(null);
   const [sessionId, setSessionId] = useState(null);
+  const editorRef = useRef(null);
+  const modifiedEditorRef = useRef(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setAnimate(true), 100);
@@ -57,32 +62,31 @@ const SubmitPage = () => {
       };
       const language = languageMap[extension] || 'javascript';
       setEditorLanguage(language);
-      setSelectedLanguage(language); // Sync dropdown with file language
+      setSelectedLanguage(language);
 
       const reader = new FileReader();
       reader.onload = (e) => {
         setUserCode(e.target.result);
+        setModifiedCode('');
       };
       reader.readAsText(file);
     }
   };
 
   const handleSubmitCode = async () => {
-    // Generate new session ID on each submit
     const newSessionId = generateNewSessionId();
     setSessionId(newSessionId);
     
-    // Set editor language to selected language
     setEditorLanguage(selectedLanguage);
     
     try {
-      // Show loading state
       setAiSuggestions([{ 
         id: 1, 
         text: 'Analyzing your code...', 
         modifiedText: '', 
         rejectReason: '', 
-        status: 'loading' 
+        status: 'loading',
+        loadingAction: 'submit' 
       }]);
       
       const response = await fetch("http://localhost:8000/generate-suggestions", {
@@ -90,7 +94,7 @@ const SubmitPage = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           code: userCode, 
-          language: selectedLanguage, // Use selected language instead of editor language
+          language: selectedLanguage,
           session_id: newSessionId
         }),
       });
@@ -102,14 +106,15 @@ const SubmitPage = () => {
 
       const data = await response.json();
       if (data.suggestions && data.suggestions.length > 0) {
-        setAiSuggestions(data.suggestions);
+        setAiSuggestions(data.suggestions.map(s => ({ ...s, loadingAction: null })));
       } else {
         setAiSuggestions([{ 
           id: 1, 
           text: 'No specific suggestions found. Your code looks good!', 
           modifiedText: '', 
           rejectReason: '', 
-          status: null 
+          status: null,
+          loadingAction: null 
         }]);
       }
     } catch (error) {
@@ -119,7 +124,8 @@ const SubmitPage = () => {
         text: `Error: ${error.message}. Please try again.`, 
         modifiedText: '', 
         rejectReason: '', 
-        status: 'error' 
+        status: 'error',
+        loadingAction: null 
       }]);
     }
   };
@@ -127,7 +133,12 @@ const SubmitPage = () => {
   const handleAcceptSuggestion = async (suggestionId) => {
     const suggestion = aiSuggestions.find((s) => s.id === suggestionId);
     if (suggestion) {
-      // Send acceptance to backend to get the modified code
+      setAiSuggestions((prev) =>
+        prev.map((s) =>
+          s.id === suggestionId ? { ...s, loadingAction: 'accept' } : s
+        )
+      );
+
       try {
         const response = await fetch("http://localhost:8000/accept-suggestion", {
           method: "POST",
@@ -145,7 +156,7 @@ const SubmitPage = () => {
         if (response.ok) {
           const data = await response.json();
           if (data.modified_code) {
-            setUserCode(data.modified_code);
+            setModifiedCode(data.modified_code);
           }
         }
       } catch (error) {
@@ -154,7 +165,7 @@ const SubmitPage = () => {
 
       setAiSuggestions((prev) =>
         prev.map((s) =>
-          s.id === suggestionId ? { ...s, status: 'Accepted' } : s
+          s.id === suggestionId ? { ...s, status: 'Accepted', loadingAction: null } : s
         )
       );
       setShowAcceptMessage(true);
@@ -163,12 +174,16 @@ const SubmitPage = () => {
 
   const handleRejectSuggestion = (suggestionId) => {
     setActiveRejectId(suggestionId);
+    setAiSuggestions((prev) =>
+      prev.map((s) =>
+        s.id === suggestionId ? { ...s, loadingAction: 'reject' } : s
+      )
+    );
   };
 
   const handleConfirmReject = async (suggestionId) => {
     const suggestion = aiSuggestions.find((s) => s.id === suggestionId);
     if (suggestion) {
-      // Send rejection to backend
       try {
         await fetch("http://localhost:8000/reject-suggestion", {
           method: "POST",
@@ -187,7 +202,7 @@ const SubmitPage = () => {
 
       setAiSuggestions((prev) =>
         prev.map((s) =>
-          s.id === suggestionId ? { ...s, status: 'Rejected' } : s
+          s.id === suggestionId ? { ...s, status: 'Rejected', loadingAction: null } : s
         )
       );
       setActiveRejectId(null);
@@ -205,7 +220,12 @@ const SubmitPage = () => {
   const handleModifySuggestion = async (suggestionId, newText) => {
     const suggestion = aiSuggestions.find((s) => s.id === suggestionId);
     if (suggestion) {
-      // Send modification request to backend
+      setAiSuggestions((prev) =>
+        prev.map((s) =>
+          s.id === suggestionId ? { ...s, loadingAction: 'modify' } : s
+        )
+      );
+
       try {
         const response = await fetch("http://localhost:8000/modify-suggestion", {
           method: "POST",
@@ -223,7 +243,7 @@ const SubmitPage = () => {
           const data = await response.json();
           setAiSuggestions((prev) =>
             prev.map((s) =>
-              s.id === suggestionId ? { ...s, modifiedText: data.modified_suggestion } : s
+              s.id === suggestionId ? { ...s, modifiedText: data.modified_suggestion, loadingAction: null } : s
             )
           );
         }
@@ -235,6 +255,10 @@ const SubmitPage = () => {
 
   const handleLanguageChange = (event) => {
     setSelectedLanguage(event.target.value);
+  };
+
+  const handleModifiedCodeChange = (value) => {
+    setModifiedCode(value);
   };
 
   const rejectionReasons = [
@@ -270,14 +294,13 @@ const SubmitPage = () => {
       <nav className="navbar">
         <div className="logo">CodeReview.</div>
         <ul className="nav-links">
-          <li><a href="#home">HOME</a></li>
-          <li><a href="#analytics">ANALYTICS</a></li>
+          <li><Link to="/">ANALYTICS</Link></li>
         </ul>
       </nav>
 
       <section className="editor-section" id="home">
         <div className={`editor-container left-editor ${animate ? 'slide-in-left' : ''}`}>
-          <h3>Paste or Upload Your Code</h3>
+          <h3>Original Code</h3>
           <div className="editor-controls">
             <div className="language-selector">
               <label htmlFor="language-select">Language:</label>
@@ -327,15 +350,42 @@ const SubmitPage = () => {
           <div className="editor-wrapper">
             <Suspense fallback={<div>Loading editor...</div>}>
               <Editor
-                height="50vh"
+                height="380px"
                 language={editorLanguage}
                 value={userCode}
                 onChange={handleUserCodeChange}
                 theme="vs-dark"
+                onMount={(editor) => {
+                  editorRef.current = editor;
+                }}
                 options={{
                   minimap: { enabled: false },
                   scrollbar: { vertical: 'auto' },
                   fontSize: 14,
+                  wordWrap: 'on',
+                  scrollBeyondLastLine: false,
+                }}
+              />
+            </Suspense>
+          </div>
+          <h3 style={{ marginTop: '20px' }}>Modified Code</h3>
+          <div className="modified-editor-wrapper">
+            <Suspense fallback={<div>Loading editor...</div>}>
+              <Editor
+                height="380px"
+                language={editorLanguage}
+                value={modifiedCode}
+                onChange={handleModifiedCodeChange}
+                theme="vs-dark"
+                onMount={(editor) => {
+                  modifiedEditorRef.current = editor;
+                }}
+                options={{
+                  minimap: { enabled: false },
+                  scrollbar: { vertical: 'auto' },
+                  fontSize: 14,
+                  wordWrap: 'on',
+                  scrollBeyondLastLine: false,
                 }}
               />
             </Suspense>
@@ -352,14 +402,19 @@ const SubmitPage = () => {
             ) : (
               aiSuggestions.map((suggestion) => (
                 <div key={suggestion.id} className="suggestion-item">
-                  <textarea
-                    value={suggestion.modifiedText || suggestion.text}
-                    onChange={(e) =>
-                      suggestion.status ? null : handleModifySuggestion(suggestion.id, e.target.value)
-                    }
-                    className="suggestion-text"
-                    disabled={!!suggestion.status}
-                  />
+                  <div className="suggestion-text-container">
+                    <textarea
+                      value={suggestion.modifiedText || suggestion.text}
+                      onChange={(e) =>
+                        suggestion.status ? null : handleModifySuggestion(suggestion.id, e.target.value)
+                      }
+                      className="suggestion-text"
+                      disabled={!!suggestion.status}
+                    />
+                    {suggestion.loadingAction === 'submit' && (
+                      <span className="loader"></span>
+                    )}
+                  </div>
                   {suggestion.status && (
                     <div className={`suggestion-status ${suggestion.status.toLowerCase()}`}>
                       {suggestion.status}
@@ -372,16 +427,18 @@ const SubmitPage = () => {
                     <button
                       onClick={() => handleAcceptSuggestion(suggestion.id)}
                       className="action-button accept"
-                      disabled={!!suggestion.status || suggestion.status === 'loading' || suggestion.status === 'error'}
+                      disabled={!!suggestion.status || suggestion.loadingAction || suggestion.status === 'loading' || suggestion.status === 'error'}
                     >
                       Accept
+                      {suggestion.loadingAction === 'accept' && <span className="loader"></span>}
                     </button>
                     <button
                       onClick={() => handleRejectSuggestion(suggestion.id)}
                       className="action-button reject"
-                      disabled={!!suggestion.status || suggestion.status === 'loading' || suggestion.status === 'error'}
+                      disabled={!!suggestion.status || suggestion.loadingAction || suggestion.status === 'loading' || suggestion.status === 'error'}
                     >
                       Reject
+                      {suggestion.loadingAction === 'reject' && <span className="loader"></span>}
                     </button>
                     <button
                       onClick={() =>
@@ -391,9 +448,10 @@ const SubmitPage = () => {
                         )
                       }
                       className="action-button modify"
-                      disabled={!!suggestion.status || suggestion.status === 'loading' || suggestion.status === 'error'}
+                      disabled={!!suggestion.status || suggestion.loadingAction || suggestion.status === 'loading' || suggestion.status === 'error'}
                     >
                       Modify
+                      {suggestion.loadingAction === 'modify' && <span className="loader"></span>}
                     </button>
                   </div>
                   {activeRejectId === suggestion.id && !suggestion.status && (

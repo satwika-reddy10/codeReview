@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import './LoginPage.css';
 
 const LoginPage = () => {
@@ -89,13 +89,32 @@ const LoginPage = () => {
 
   return (
     <div className="login-page">
+      <div className="star-container">
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+        <div className="star"></div>
+      </div>
       <nav className="navbar">
         <div className="logo">CodeReview.</div>
         <ul className="nav-links">
-          <li><a href="#home">HOME</a></li>
-          <li><a href="#about">ABOUT US</a></li>
-          <li><a href="#contact">CONTACT</a></li>
-          <li><a href="#login" className="login-nav">LOG IN</a></li>
+          <li><Link to="/">HOME</Link></li>
         </ul>
       </nav>
       <div className="login-container">
@@ -103,7 +122,7 @@ const LoginPage = () => {
           <h2>{isLogin ? 'Log in' : 'Sign up'}</h2>
           <form onSubmit={isLogin ? handleLogin : handleSignup}>
             <div className="input-group">
-              <label htmlFor="username">Username (Email)</label>
+              <label htmlFor="username">Username</label>
               <input
                 id="username"
                 type="email"
@@ -125,18 +144,12 @@ const LoginPage = () => {
               />
               {isLogin && <a href="#forgot" className="forgot-password">Forgot Password?</a>}
             </div>
-            {isLogin && (
-              <div className="checkbox-group">
-                <input type="checkbox" id="rememberMe" />
-                <label htmlFor="rememberMe">Remember Me</label>
-              </div>
-            )}
             <button type="submit" className="login-btn">
               {isLogin ? 'Log in' : 'Sign up'}
             </button>
             <p className="signup-link">
               {isLogin ? "Don't have an account? " : "Already have an account? "}
-              <span onClick={handleToggleForm} style={{ cursor: 'pointer', color: '#4285F4' }}>
+              <span onClick={handleToggleForm} style={{ cursor: 'pointer', color: '#00FFFF' }}>
                 {isLogin ? 'Sign up' : 'Log in'}
               </span>
             </p>

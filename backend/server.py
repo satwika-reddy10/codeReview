@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, validator
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, JSON
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from sqlalchemy.dialects.postgresql import JSONB
@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 import json
 from typing import List, Optional
+import asyncio
 
 # Load environment variables
 load_dotenv()
@@ -30,6 +31,8 @@ engine = create_engine(
     pool_size=5,
     max_overflow=10,
     pool_timeout=30,
+    pool_pre_ping=True,
+    pool_recycle=3600,
     connect_args=connect_args
 )
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
@@ -115,6 +118,19 @@ class CodeInput(BaseModel):
     code: str
     language: str
     session_id: str
+    
+    @validator('code')
+    def code_must_not_be_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Code cannot be empty')
+        return v
+    
+    @validator('language')
+    def language_must_be_valid(cls, v):
+        valid_languages = ['python', 'javascript', 'java', 'cpp', 'go', 'rust', 'csharp', 'php']
+        if v.lower() not in valid_languages:
+            print(f"Warning: Unrecognized language '{v}'")
+        return v
 
 class SuggestionAction(BaseModel):
     session_id: str
@@ -147,6 +163,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Request logging middleware
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    print(f"Request: {request.method} {request.url}")
+    try:
+        body = await request.body()
+        if body and len(body) < 1000:  # Log small bodies only
+            print(f"Request body: {body.decode()}")
+    except:
+        pass
+    
+    response = await call_next(request)
+    print(f"Response status: {response.status_code}")
+    return response
 
 # Dependency: DB Session
 def get_db():
@@ -186,7 +217,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 # ------------------ AI SUGGESTIONS ROUTE ------------------
-async def call_qwen_api(prompt: str):
+async def call_qwen_api(prompt: str, retries=3):
     try:
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
@@ -195,22 +226,53 @@ async def call_qwen_api(prompt: str):
             "HTTP-Referer": "http://localhost:3000",
             "X-Title": "CodeReview App"
         }
+        
+        # Use a more reliable model
         data = {
-            "model": "qwen/qwen-2.5-72b-instruct:free",
+            "model": "qwen/qwen-2.5-72b-instruct:free",  # Changed to more reliable model
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 800,
             "temperature": 0.3
         }
 
-        async with httpx.AsyncClient(timeout=45) as client:
-            response = await client.post(url, headers=headers, json=data)
-            response.raise_for_status()
-            result = response.json()
+        for attempt in range(retries):
+            try:
+                async with httpx.AsyncClient(timeout=120) as client:
+                    response = await client.post(url, headers=headers, json=data)
+                    
+                    # Handle specific status codes
+                    if response.status_code == 429:
+                        if attempt < retries - 1:
+                            await asyncio.sleep(2 ** attempt)
+                            continue
+                        raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again later.")
+                    elif response.status_code == 401:
+                        raise HTTPException(status_code=401, detail="Invalid API key.")
+                    elif response.status_code == 400:
+                        try:
+                            error_detail = response.json()
+                            raise HTTPException(status_code=400, detail=f"Bad request: {error_detail}")
+                        except:
+                            raise HTTPException(status_code=400, detail=f"Bad request: {response.text}")
+                    elif response.status_code != 200:
+                        try:
+                            error_content = response.json()
+                            print(f"API Error: {error_content}")
+                        except:
+                            print(f"API Error Text: {response.text}")
+                        if attempt < retries - 1:
+                            await asyncio.sleep(2 ** attempt)
+                            continue
+                        response.raise_for_status()
+                    
+                    result = response.json()
+                    return result["choices"][0]["message"]["content"]
 
-        # Debug: log raw output for troubleshooting
-        raw_output = result["choices"][0]["message"]["content"]
-        print("AI raw output:", raw_output[:500])  # limit print length
-        return raw_output
+            except httpx.TimeoutException:
+                if attempt < retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                raise
 
     except httpx.TimeoutException:
         raise HTTPException(status_code=408, detail="AI service timeout")
@@ -219,18 +281,24 @@ async def call_qwen_api(prompt: str):
         if e.response is not None:
             try:
                 error_detail = e.response.json()
-                error_msg = error_detail.get("error", {}).get("message", str(e))
+                actual_error = error_detail.get("error", {})
+                error_msg = actual_error.get("message", str(e))
+                print(f"Detailed API Error: {actual_error}")
             except:
                 error_msg = e.response.text
         print(error_msg)
-        raise HTTPException(status_code=408, detail="AI service temporarily unavailable")
+        raise HTTPException(status_code=408, detail=f"AI service temporarily unavailable: {error_msg}")
     except Exception as e:
         print(f"Unexpected error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to connect to AI service")
+        raise HTTPException(status_code=500, detail=f"Failed to connect to AI service: {str(e)}")
 
 @app.post("/generate-suggestions")
 async def generate_suggestions(payload: CodeInput, db: Session = Depends(get_db)):
     try:
+        # Validate input
+        if not payload.code.strip():
+            raise HTTPException(status_code=400, detail="Code cannot be empty")
+            
         # Check if session already exists
         existing_session = db.query(CodeSession).filter(
             CodeSession.session_id == payload.session_id
@@ -528,4 +596,14 @@ async def modify_suggestion(payload: ModifySuggestion, db: Session = Depends(get
 # Health check endpoint
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "model": "qwen/qwen-2.5-72b-instruct:free"}
+    return {"status": "healthy", "model": "openai/gpt-4o-mini"}
+
+# Test AI connection endpoint
+@app.get("/test-ai")
+async def test_ai_connection():
+    try:
+        test_prompt = "Say hello world"
+        result = await call_qwen_api(test_prompt)
+        return {"status": "success", "response": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

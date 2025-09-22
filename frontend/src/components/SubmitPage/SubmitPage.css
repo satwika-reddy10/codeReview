@@ -3,15 +3,15 @@
 /* Whole page */
 .submit-page {
   width: 100%;
-  background: #111; /* Dark theme */
+  background: #000;
   color: #fff;
   font-family: 'Inter', Arial, Helvetica, sans-serif;
   position: relative;
   overflow-x: hidden;
-  min-height: 100vh; /* Allow scrolling */
+  min-height: 100vh;
 }
 
-/* Star effect (reused from LandingPage.css) */
+/* Star effect */
 .star-container {
   position: absolute;
   top: 0;
@@ -26,17 +26,17 @@
   position: absolute;
   width: 3px;
   height: 3px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 1);
   border-radius: 50%;
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
-  animation: twinkle 3s infinite ease-in-out;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 1), 0 0 20px rgba(255, 255, 255, 0.5);
+  animation: twinkle 4s infinite ease-in-out;
   opacity: 0;
 }
 
 @keyframes twinkle {
-  0% { transform: scale(0.5); opacity: 0; }
-  50% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(0.5); opacity: 0; }
+  0% { transform: scale(0.5); opacity: 0.2; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0.5); opacity: 0.2; }
 }
 
 .star:nth-child(1) { top: 5%; left: 10%; animation-delay: 0s; }
@@ -69,7 +69,7 @@
   position: sticky;
   top: 0;
   z-index: 10;
-  background: linear-gradient(to bottom, rgba(17, 17, 17, 0.9), rgba(17, 17, 17, 0.7));
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.7));
   backdrop-filter: blur(4px);
 }
 
@@ -95,7 +95,7 @@
 }
 
 .nav-links li a:hover {
-  color: #60a5fa;
+  color: #00FFFF;
 }
 
 /* Editor section */
@@ -103,7 +103,7 @@
   display: flex;
   justify-content: center;
   padding: 40px;
-  gap: 80px !important;
+  gap: 80px;
   position: relative;
   z-index: 2;
   max-width: 1300px;
@@ -118,13 +118,14 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(8px);
   box-shadow: 0 4px 12px rgba(66, 133, 244, 0.15);
-  overflow: hidden;
+  overflow: visible;
   will-change: transform;
-  transition: box-shadow 0.3s ease;
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
 }
 
 .editor-container:hover {
-  box-shadow: 0 6px 16px rgba(66, 133, 244, 0.3);
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.5), 0 0 40px rgba(0, 255, 255, 0.3);
+  transform: translateY(-5px);
 }
 
 .editor-container h3 {
@@ -136,10 +137,12 @@
   letter-spacing: 0.5px;
 }
 
-.editor-wrapper {
+.editor-wrapper,
+.modified-editor-wrapper {
   width: 100%;
-  height: 50vh;
-  overflow: hidden;
+  height: 380px;
+  overflow-y: auto;
+  min-height: 380px;
 }
 
 .editor-controls {
@@ -169,8 +172,9 @@
 
 .file-upload-button:hover {
   background: rgba(255, 255, 255, 0.1);
-  border-color: #60a5fa;
+  border-color: #00FFFF;
   color: #fff;
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
 }
 
 .upload-icon {
@@ -187,7 +191,7 @@
 }
 
 .file-upload-button:hover .upload-icon svg {
-  stroke: #60a5fa;
+  stroke: #00FFFF;
 }
 
 .submit-code-button {
@@ -203,48 +207,71 @@
 
 .submit-code-button:hover {
   background: rgba(255, 255, 255, 0.1);
-  border-color: #60a5fa;
+  border-color: #00FFFF;
   color: #fff;
+  box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
 }
 
 .suggestions-wrapper {
   width: 100%;
-  max-height: 50vh;
-  overflow-y: auto;
   padding: 8px;
   position: relative;
 }
 
 .suggestion-item {
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 10px;
-  padding: 12px;
-  margin-bottom: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   transition: background 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .suggestion-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.suggestion-text-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .suggestion-text {
   width: 100%;
-  min-height: 50px;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  color: #eee;
-  padding: 10px;
+  min-height: 60px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #f0f0f0;
+  padding: 12px;
   font-family: 'Fira Code', 'Courier New', monospace;
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.6;
   resize: vertical;
   transition: border-color 0.3s ease;
 }
 
 .suggestion-text:focus {
-  border-color: #60a5fa;
-  outline: none;
+  border-color: #00FFFF;
+  box-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+}
+
+.loader {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #00FFFF;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .suggestion-actions {
@@ -252,6 +279,7 @@
   gap: 8px;
   margin-top: 8px;
   justify-content: flex-end;
+  align-items: center;
 }
 
 .reject-reason-container {
@@ -261,23 +289,21 @@
   gap: 8px;
 }
 
-.reject-reason-text {
-  width: 100%;
-  min-height: 40px;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  color: #eee;
-  padding: 8px;
-  font-family: 'Fira Code', 'Courier New', monospace;
-  font-size: 12px;
-  resize: vertical;
+.reject-reason-select {
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid #444;
+  background-color: #2d2d30;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
   transition: border-color 0.3s ease;
 }
 
-.reject-reason-text:focus {
-  border-color: #60a5fa;
+.reject-reason-select:focus {
   outline: none;
+  border-color: #00FFFF;
+  box-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
 }
 
 .confirm-reject-button {
@@ -295,6 +321,7 @@
 
 .confirm-reject-button:hover {
   background: #e53e3e;
+  box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
 }
 
 .accept-message {
@@ -318,6 +345,29 @@
   100% { opacity: 0; transform: translateY(10px); }
 }
 
+.suggestion-status {
+  margin-top: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.suggestion-status.accepted {
+  background: rgba(46, 139, 87, 0.3);
+  color: #fff;
+}
+
+.suggestion-status.rejected {
+  background: rgba(197, 48, 48, 0.3);
+  color: #fff;
+}
+
+.reject-reason {
+  font-style: italic;
+}
+
 .action-button {
   padding: 6px 12px;
   border: none;
@@ -326,6 +376,8 @@
   font-size: 13px;
   font-weight: 500;
   transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
 }
 
 .action-button.accept {
@@ -335,6 +387,7 @@
 
 .action-button.accept:hover {
   background: #38a169;
+  box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
 }
 
 .action-button.reject {
@@ -344,6 +397,7 @@
 
 .action-button.reject:hover {
   background: #e53e3e;
+  box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
 }
 
 .action-button.modify {
@@ -353,6 +407,12 @@
 
 .action-button.modify:hover {
   background: #d69e2e;
+  box-shadow: 0 0 10px rgba(255, 255, 0, 0.5);
+}
+
+.action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Animations */
@@ -365,22 +425,15 @@
 }
 
 @keyframes slideInLeft {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(0);
-  }
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
 }
 
 @keyframes slideInRight {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }
+
 .language-selector {
   display: flex;
   align-items: center;
@@ -405,7 +458,8 @@
 
 .language-dropdown:focus {
   outline: none;
-  border-color: #007acc;
+  border-color: #00FFFF;
+  box-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
 }
 
 .editor-controls {
@@ -430,5 +484,16 @@
   
   .language-dropdown {
     width: 100%;
+  }
+
+  .editor-section {
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+  }
+
+  .editor-container {
+    width: 100%;
+    max-width: 600px;
   }
 }

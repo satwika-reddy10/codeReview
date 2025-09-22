@@ -1,7 +1,7 @@
 /* Whole page */
 .landing-page {
   width: 100%;
-  background: #111; /* Dark theme */
+  background: #000; 
   color: #fff;
   font-family: Arial, Helvetica, sans-serif;
   position: relative;
@@ -24,17 +24,17 @@
   position: absolute;
   width: 3px;
   height: 3px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 1); 
   border-radius: 50%;
-  box-shadow: 0 0 6px rgba(255, 255, 255, 0.7);
-  animation: twinkle 3s infinite ease-in-out;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 1), 0 0 20px rgba(255, 255, 255, 0.5); 
+  animation: twinkle 4s infinite ease-in-out; 
   opacity: 0;
 }
 
 @keyframes twinkle {
-  0% { transform: scale(0.5); opacity: 0; }
-  50% { transform: scale(1); opacity: 1; }
-  100% { transform: scale(0.5); opacity: 0; }
+  0% { transform: scale(0.5); opacity: 0.2; } 
+  50% { transform: scale(1.2); opacity: 1; } 
+  100% { transform: scale(0.5); opacity: 0.2; }
 }
 
 .star:nth-child(1) { top: 5%; left: 10%; animation-delay: 0s; }
@@ -89,13 +89,29 @@
 }
 
 .nav-links li a:hover {
-  color: #4285F4;
+  color: #00FFFF; 
 }
 
+
 .login-nav {
-  color: #4285F4;
+  color: #fff; 
+  background-color: transparent; 
+  padding: 6px 12px;
+  border-radius: 12px;
   font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease-in-out; 
+  border: 2px solid transparent; 
 }
+
+.login-nav:hover {
+  color: #00ffff;
+  background-color: transparent; 
+  border: 2px solid #00ffff;
+  transform: scale(1.05); 
+}
+
+
 
 /* Hero section */
 .hero-section {
@@ -110,7 +126,7 @@
 /* Semicircle gradient overlay */
 .overlay {
   position: absolute;
-  top: -30%;
+  top: -50%; /* Changed from -30% to -50% to move it higher */
   left: 50%;
   transform: translateX(-50%);
   width: 1700px;
@@ -120,7 +136,6 @@
   z-index: 1;
   opacity: 0.15; /* Soft overlay */
 }
-
 /* Hero content */
 .hero-content {
   position: relative;
@@ -135,7 +150,7 @@
 
 @keyframes fadeOut {
   0% { opacity: 1; }
-  50% { opacity: 0.5; }
+  50% { opacity: 0.3; }
   100% { opacity: 1; }
 }
 
@@ -145,7 +160,7 @@
 }
 
 .hero-content h1 span {
-  color: #4285F4;
+  color: #00FFFF; 
 }
 
 .hero-content p {
@@ -164,13 +179,14 @@
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.3s, transform 0.2s;
+  transition: background 0.3s, transform 0.2s, box-shadow 0.3s;
   box-shadow: 0 4px 15px rgba(224, 226, 228, 0.4);
 }
 
 .cta-btn:hover {
   background: #f7f8f9;
   transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0, 255, 255, 0.5); 
 }
 
 /* Features section */
@@ -206,14 +222,14 @@
 }
 
 .feature-card:hover {
-  transform: translateY(-10px); /* Fixed typo: removed "Lect" */
-  box-shadow: 0 8px 20px rgba(66, 133, 244, 0.3);
+  transform: translateY(-10px);
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.5), 0 0 40px rgba(0, 255, 255, 0.3); 
 }
 
 .feature-icon {
   font-size: 40px;
   margin-bottom: 20px;
-  color: #4285F4;
+  color: #00FFFF;
 }
 .feature-card h3 {
   font-size: 24px;
@@ -256,7 +272,7 @@
 
 .about-content:hover {
   transform: translateY(-10px);
-  box-shadow: 0 8px 20px rgba(66, 133, 244, 0.3);
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.5), 0 0 40px rgba(0, 255, 255, 0.3); /* Added light neon blue glow on hover */
 }
 
 .about-content p {
@@ -268,7 +284,7 @@
 
 /* Footer section */
 .footer-section {
-  background: black(1,1,1);
+  background: #000; /* Fixed and set to pure black */
   text-align: center;
   position: relative;
   z-index: 2;
@@ -283,31 +299,31 @@
   max-width:1350px;
   margin: 0 auto;
   flex-wrap: wrap;
-  gap: 15px; /* Reduced gap from 20px to 15px */
+  gap: 15px; 
 }
 
 .footer-logo {
-  font-size: 20px; /* Slightly smaller logo */
+  font-size: 20px; 
   font-weight: 700;
   color: #fff;
   margin-right: 500px;
 }
 
 .contact-details h3 {
-  font-size: 20px; /* Reduced from 24px */
+  font-size: 20px;
   font-weight: 600;
   color: #fff;
-  margin-bottom: 10px; /* Reduced from 15px */
+  margin-bottom: 10px; 
 }
 
 .contact-details p {
-  font-size: 14px; /* Reduced from 16px */
+  font-size: 14px;
   color: #ddd;
-  margin-bottom: 8px; /* Reduced from 10px */
+  margin-bottom: 8px; 
 }
 
 .contact-details a {
-  color: #4285F4;
+  color: #00FFFF;
   text-decoration: none;
   transition: color 0.3s;
 }
@@ -318,21 +334,21 @@
 
 .social-links {
   display: flex;
-  gap: 12px; /* Reduced from 15px */
+  gap: 12px;
   justify-content: center;
   align-items: center;
 }
 
 .social-links a {
-  font-size: 14px; /* Reduced from 16px */
+  font-size: 14px;
   font-weight: 500;
   display: flex;
   align-items: center;
-  gap: 5px; /* Space between icon and text */
+  gap: 5px;
 }
 
 .footer-bottom {
-  font-size: 12px; /* Reduced from 14px */
+  font-size: 12px;
   color: #ddd;
   padding-bottom: 10px;
 }
