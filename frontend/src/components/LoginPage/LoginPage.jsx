@@ -82,6 +82,11 @@ const LoginPage = () => {
     }
   };
 
+  const handleGoogleLogin = () => {
+    // Redirect to Google OAuth endpoint
+    window.location.href = 'http://localhost:8000/auth/google';
+  };
+
   const handleToggleForm = () => {
     setIsLogin(!isLogin);
     setFormState({ username: '', password: '' });
@@ -147,6 +152,19 @@ const LoginPage = () => {
             <button type="submit" className="login-btn">
               {isLogin ? 'Log in' : 'Sign up'}
             </button>
+            
+            {/* Google Login Button */}
+            <div className="google-login-container">
+              <button 
+                type="button" 
+                className="google-login-btn"
+                onClick={handleGoogleLogin}
+              >
+                <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google logo" />
+                Sign in with Google
+              </button>
+            </div>
+            
             <p className="signup-link">
               {isLogin ? "Don't have an account? " : "Already have an account? "}
               <span onClick={handleToggleForm} style={{ cursor: 'pointer', color: '#00FFFF' }}>

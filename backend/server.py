@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field, validator
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, JSON, func
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, JSON, func, Boolean
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from sqlalchemy.dialects.postgresql import JSONB
 import bcrypt
@@ -13,6 +13,15 @@ from datetime import datetime, timedelta
 import json
 from typing import List, Optional
 import asyncio
+import secrets
+from fastapi.responses import RedirectResponse
+from google.auth.transport.requests import Request as GoogleRequest
+from google.oauth2 import id_token
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
+import logging
+from google.auth.exceptions import GoogleAuthError
 
 # Load environment variables
 load_dotenv()
@@ -21,8 +30,18 @@ DATABASE_URL = os.getenv(
     "postgresql://postgres:mypassword@localhost:5432/postgres"
 )
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+SECRET_KEY = os.getenv("SECRET_KEY", "your_32_char_secret_key_here")
+
 if not OPENROUTER_API_KEY:
     raise ValueError("Missing OPENROUTER_API_KEY in environment")
+if not GOOGLE_CLIENT_ID:
+    raise ValueError("Missing GOOGLE_CLIENT_ID in environment")
+if not GOOGLE_CLIENT_SECRET:
+    raise ValueError("Missing GOOGLE_CLIENT_SECRET in environment")
+if len(SECRET_KEY) < 32:
+    raise ValueError("SECRET_KEY must be at least 32 characters long")
 
 # Database Configuration
 connect_args = {"sslmode": "require"} if "supabase" in DATABASE_URL else {}
@@ -43,7 +62,9 @@ class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
-    password = Column(String(200), nullable=False)
+    password = Column(String(200), nullable=True)  # Nullable for Google auth
+    google_id = Column(String, unique=True, nullable=True)  # New field for Google ID
+    is_google_user = Column(Boolean, default=False)  # New field to track Google users
 
 class CodeSession(Base):
     __tablename__ = "code_sessions"
@@ -60,6 +81,7 @@ class AISuggestion(Base):
     session_id = Column(String, nullable=False)
     suggestion_id = Column(Integer)
     suggestion_text = Column(Text)
+    severity = Column(String)  # New column for severity (High, Medium, Low)
     language = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -193,6 +215,103 @@ def get_db():
     finally:
         db.close()
 
+# Google OAuth routes
+@app.get("/auth/google")
+def google_auth():
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": ["http://localhost:8000/auth/google/callback"]
+            }
+        },
+        scopes=["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"]
+    )
+    flow.redirect_uri = "http://localhost:8000/auth/google/callback"
+    
+    authorization_url, state = flow.authorization_url(
+        access_type="offline",
+        include_granted_scopes="true",
+        state=secrets.token_urlsafe(32)  # Add state parameter for security
+    )
+    
+    return RedirectResponse(authorization_url)
+
+@app.get("/auth/google/callback")
+async def google_auth_callback(request: Request, db: Session = Depends(get_db)):
+    code = request.query_params.get("code")
+    state = request.query_params.get("state")
+    
+    if not code:
+        raise HTTPException(status_code=400, detail="Authorization code not provided")
+    
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": ["http://localhost:8000/auth/google/callback"]
+            }
+        },
+        scopes=["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"]
+    )
+    flow.redirect_uri = "http://localhost:8000/auth/google/callback"
+    
+    try:
+        # Exchange the authorization code for an access token
+        flow.fetch_token(code=code)
+        credentials = flow.credentials
+        
+        # Verify the ID token to get user info
+        id_info = id_token.verify_oauth2_token(
+            credentials.id_token,
+            GoogleRequest(),
+            GOOGLE_CLIENT_ID,
+            clock_skew_in_seconds=10  # Add clock skew allowance
+        )
+        
+        email = id_info.get('email')
+        google_id = id_info.get('sub')  # Google's unique user ID
+        
+        # Check if user exists
+        existing_user = db.query(User).filter(User.google_id == google_id).first()
+        if existing_user:
+            # User already exists, return success
+            # Redirect to frontend with success message
+            return RedirectResponse(url="http://localhost:3000/submit?login=success&username=" + existing_user.username)
+        
+        # Check if email already exists (but without Google ID)
+        existing_email_user = db.query(User).filter(User.username == email).first()
+        if existing_email_user:
+            # Update existing user with Google ID
+            existing_email_user.google_id = google_id
+            existing_email_user.is_google_user = True
+            db.commit()
+            return RedirectResponse(url="http://localhost:3000/submit?login=success&username=" + existing_email_user.username)
+        
+        # Create new user
+        new_user = User(
+            username=email,
+            google_id=google_id,
+            is_google_user=True
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        
+        return RedirectResponse(url="http://localhost:3000/submit?signup=success&username=" + new_user.username)
+    except GoogleAuthError as e:
+        logging.error(f"Google Auth error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Google authentication error: {str(e)}")
+    except Exception as e:
+        logging.error(f"Google OAuth error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Google OAuth error: {str(e)}")
+
 # ------------------ AUTH ROUTES ------------------
 @app.post("/signup")
 def signup(user: UserCreate, db: Session = Depends(get_db)):
@@ -216,6 +335,8 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         db_user = db.query(User).filter(User.username == user.username).first()
         if not db_user:
             raise HTTPException(status_code=400, detail="Invalid username or password")
+        if not db_user.password:  # Google user without password
+            raise HTTPException(status_code=400, detail="Please login with Google")
         if not bcrypt.checkpw(user.password.encode("utf-8"), db_user.password.encode("utf-8")):
             raise HTTPException(status_code=400, detail="Invalid username or password")
         return {"message": "Login successful", "username": db_user.username}
@@ -263,7 +384,7 @@ async def generate_suggestions(payload: CodeInput, db: Session = Depends(get_db)
         db.commit()
 
         # Generate AI suggestions
-        prompt = f"""You are an expert {payload.language} code reviewer. Analyze the following code and provide concise, actionable suggestions for improvement. 
+        prompt = f"""You are an expert {payload.language} code reviewer. Analyze the following code and provide detailed, actionable suggestions for improvement.
 
         Focus on:
         - Code quality and best practices
@@ -272,9 +393,22 @@ async def generate_suggestions(payload: CodeInput, db: Session = Depends(get_db)
         - Potential bugs or edge cases
         - Security concerns if applicable
 
-        Provide suggestions as a numbered list, each on a new line, starting with 1.
-        Keep each suggestion to 1-2 sentences maximum.
-        Do not explain or add extra text - just the numbered list.
+        For each suggestion, provide:
+        1. The specific line number(s) or code snippet where the issue occurs
+        2. A severity level (High, Medium, Low) based on the issue's impact or urgency
+        3. A clear description of the issue or improvement
+        4. An explanation of why the change is beneficial
+        5. A concise example of the improved code (if applicable)
+
+        Format each suggestion as follows:
+        **Suggestion {{number}}:**
+        - **Line(s):** {{line number(s) or 'General' if not specific}}
+        - **Severity:** {{High, Medium, or Low}}
+        - **Issue:** {{description of the issue or improvement}}
+        - **Why:** {{explanation of the benefit}}
+        - **Improved Code (if applicable):** ```{{language}}\n{{improved code}}\n```
+
+        Return 3-5 suggestions, each formatted as above. Do not include any introductory or concluding text beyond the suggestions.
 
         CODE:
         {payload.code}
@@ -285,17 +419,16 @@ async def generate_suggestions(payload: CodeInput, db: Session = Depends(get_db)
         
         # Parse suggestions
         suggestions = []
-        lines = raw_output.strip().split('\n')
-        for i, line in enumerate(lines):
-            if line.strip().startswith(f"{i+1}."):
-                sentence = line.strip()[len(f"{i+1}. "):].strip()
-            else:
-                sentence = line.strip()
-            
-            if sentence:
+        suggestion_blocks = raw_output.strip().split('\n\n')
+        for i, block in enumerate(suggestion_blocks):
+            if block.strip():
+                # Extract severity from the block
+                severity_match = re.search(r'\*\*Severity:\*\*\s*(High|Medium|Low)', block)
+                severity = severity_match.group(1) if severity_match else "Medium"  # Default to Medium if not found
                 suggestion_data = {
                     "id": i + 1,
-                    "text": sentence,
+                    "text": block.strip(),
+                    "severity": severity,
                     "modifiedText": "",
                     "rejectReason": "",
                     "status": None
@@ -305,7 +438,8 @@ async def generate_suggestions(payload: CodeInput, db: Session = Depends(get_db)
                 ai_suggestion = AISuggestion(
                     session_id=payload.session_id,
                     suggestion_id=i + 1,
-                    suggestion_text=sentence,
+                    suggestion_text=block.strip(),
+                    severity=severity,
                     language=payload.language
                 )
                 db.add(ai_suggestion)
@@ -456,13 +590,20 @@ async def modify_suggestion(payload: ModifySuggestion, db: Session = Depends(get
         db.commit()
         
         # Generate improved suggestion based on modification
-        prompt = f"""You are an expert code reviewer. A user modified an AI suggestion. 
-        Original suggestion: {payload.original_text}
-        User's modification: {payload.modified_text}
+        prompt = f"""You are an expert code reviewer analyzing {payload.language} code.
+        CODE TO REVIEW: {payload.code}
         
-        Please provide an improved version of the suggestion that incorporates the user's feedback.
-        Keep it concise and focused on the code improvement.
-        """
+        INSTRUCTIONS:
+        1. Provide 3-5 specific improvement suggestions
+        2. Focus on critical issues first: bugs, security vulnerabilities, performance problems
+        3. Format each suggestion as a numbered list item (1., 2., etc.)
+        4. Be concise but specific - mention what to change and why
+        5. If relevant, reference specific line numbers or code patterns
+        6. Do NOT include any introductory or concluding text
+        7. Do NOT rewrite the entire code
+        {pattern_context}
+        
+        SUGGESTIONS:"""
         
         raw_output = await call_qwen_api(prompt)
         
