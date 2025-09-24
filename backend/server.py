@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field, validator
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, JSON
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, JSON, func
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from sqlalchemy.dialects.postgresql import JSONB
 import bcrypt
@@ -9,7 +9,7 @@ import os
 import re
 import httpx
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 from typing import List, Optional
 import asyncio
@@ -152,6 +152,12 @@ class ModifySuggestion(BaseModel):
     modified_text: str
     language: str
 
+class AnalyticsFilter(BaseModel):
+    user_id: Optional[int] = None
+    language: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
 # FastAPI App
 app = FastAPI()
 
@@ -222,112 +228,32 @@ async def call_qwen_api(prompt: str, retries=3):
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "http://localhost:3000",
-            "X-Title": "CodeReview App"
+            "Content-Type": "application/json"
         }
-        
-        # Use a more reliable model
         data = {
-            "model": "qwen/qwen-2.5-72b-instruct:free",  # Changed to more reliable model
+            "model": "qwen/qwen-2.5-72b-instruct",
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 800,
-            "temperature": 0.3
+            "max_tokens": 2000,
+            "temperature": 0.7,
+            "top_p": 0.95,
         }
-
-        for attempt in range(retries):
-            try:
-                async with httpx.AsyncClient(timeout=120) as client:
-                    response = await client.post(url, headers=headers, json=data)
-                    
-                    # Handle specific status codes
-                    if response.status_code == 429:
-                        if attempt < retries - 1:
-                            await asyncio.sleep(2 ** attempt)
-                            continue
-                        raise HTTPException(status_code=429, detail="Rate limit exceeded. Please try again later.")
-                    elif response.status_code == 401:
-                        raise HTTPException(status_code=401, detail="Invalid API key.")
-                    elif response.status_code == 400:
-                        try:
-                            error_detail = response.json()
-                            raise HTTPException(status_code=400, detail=f"Bad request: {error_detail}")
-                        except:
-                            raise HTTPException(status_code=400, detail=f"Bad request: {response.text}")
-                    elif response.status_code != 200:
-                        try:
-                            error_content = response.json()
-                            print(f"API Error: {error_content}")
-                        except:
-                            print(f"API Error Text: {response.text}")
-                        if attempt < retries - 1:
-                            await asyncio.sleep(2 ** attempt)
-                            continue
-                        response.raise_for_status()
-                    
-                    result = response.json()
-                    return result["choices"][0]["message"]["content"]
-
-            except httpx.TimeoutException:
-                if attempt < retries - 1:
+        async with httpx.AsyncClient() as client:
+            for attempt in range(retries):
+                try:
+                    response = await client.post(url, headers=headers, json=data, timeout=60)
+                    response.raise_for_status()
+                    return response.json()["choices"][0]["message"]["content"]
+                except httpx.RequestError as e:
+                    if attempt == retries - 1:
+                        raise
                     await asyncio.sleep(2 ** attempt)
-                    continue
-                raise
-
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=408, detail="AI service timeout")
-    except httpx.HTTPStatusError as e:
-        error_msg = f"AI service error: {str(e)}"
-        if e.response is not None:
-            try:
-                error_detail = e.response.json()
-                actual_error = error_detail.get("error", {})
-                error_msg = actual_error.get("message", str(e))
-                print(f"Detailed API Error: {actual_error}")
-            except:
-                error_msg = e.response.text
-        print(error_msg)
-        raise HTTPException(status_code=408, detail=f"AI service temporarily unavailable: {error_msg}")
     except Exception as e:
-        print(f"Unexpected error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to connect to AI service: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"AI API error: {str(e)}")
 
 @app.post("/generate-suggestions")
 async def generate_suggestions(payload: CodeInput, db: Session = Depends(get_db)):
     try:
-        # Validate input
-        if not payload.code.strip():
-            raise HTTPException(status_code=400, detail="Code cannot be empty")
-            
-        # Check if session already exists
-        existing_session = db.query(CodeSession).filter(
-            CodeSession.session_id == payload.session_id
-        ).first()
-        
-        # If session exists, delete it and all related data
-        if existing_session:
-            # Delete related records first
-            db.query(AISuggestion).filter(
-                AISuggestion.session_id == payload.session_id
-            ).delete()
-            db.query(AcceptedSuggestion).filter(
-                AcceptedSuggestion.session_id == payload.session_id
-            ).delete()
-            db.query(RejectedSuggestion).filter(
-                RejectedSuggestion.session_id == payload.session_id
-            ).delete()
-            db.query(ModifiedSuggestion).filter(
-                ModifiedSuggestion.session_id == payload.session_id
-            ).delete()
-            db.query(UserPattern).filter(
-                UserPattern.session_id == payload.session_id
-            ).delete()
-            
-            # Delete the session itself
-            db.delete(existing_session)
-            db.commit()
-        
-        # Create new session
+        # Store code session
         code_session = CodeSession(
             session_id=payload.session_id,
             language=payload.language,
@@ -336,100 +262,55 @@ async def generate_suggestions(payload: CodeInput, db: Session = Depends(get_db)
         db.add(code_session)
         db.commit()
 
-        # Check for user patterns to customize suggestions
-        user_patterns = db.query(UserPattern).filter(
-            UserPattern.session_id == payload.session_id
-        ).all()
+        # Generate AI suggestions
+        prompt = f"""You are an expert {payload.language} code reviewer. Analyze the following code and provide concise, actionable suggestions for improvement. 
 
-        # Build pattern context for AI
-        pattern_context = ""
-        if user_patterns:
-            pattern_context = "\n\nUSER PREFERENCES (Based on previous interactions):\n"
-            for pattern in user_patterns:
-                if pattern.pattern_type == "rejected":
-                    pattern_context += f"- Avoid suggestions like: {pattern.pattern_data.get('suggestion_text', '')}\n"
-                elif pattern.pattern_type == "accepted":
-                    pattern_context += f"- Prefer suggestions like: {pattern.pattern_data.get('suggestion_text', '')}\n"
+        Focus on:
+        - Code quality and best practices
+        - Performance optimizations
+        - Readability and maintainability
+        - Potential bugs or edge cases
+        - Security concerns if applicable
 
-        prompt = f"""You are an expert code reviewer analyzing {payload.language} code.
+        Provide suggestions as a numbered list, each on a new line, starting with 1.
+        Keep each suggestion to 1-2 sentences maximum.
+        Do not explain or add extra text - just the numbered list.
 
-CODE TO REVIEW:
-{payload.code}
+        CODE:
+        {payload.code}
 
-INSTRUCTIONS:
-1. Provide 3-5 specific improvement suggestions
-2. Focus on critical issues first: bugs, security vulnerabilities, performance problems
-3. Format each suggestion as a numbered list item (1., 2., etc.)
-4. Be concise but specific - mention what to change and why
-5. If relevant, reference specific line numbers or code patterns
-6. Do NOT include any introductory or concluding text
-7. Do NOT rewrite the entire code
-{pattern_context}
-
-SUGGESTIONS:"""
+        SUGGESTIONS:"""
 
         raw_output = await call_qwen_api(prompt)
-
-        # Parse the response into structured suggestions
+        
+        # Parse suggestions
         suggestions = []
-        lines = raw_output.split("\n")
-        suggestion_count = 0
-
-        for line in lines:
-            line = line.strip()
-            if (line.startswith(('1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.')) or
-                line.startswith(('- ', '* ', '• '))):
-
-                clean_line = re.sub(r'^\d+[\.\)]\s*', '', line)  # Remove numbering
-                clean_line = re.sub(r'^[-*•]\s*', '', clean_line)  # Remove bullets
-
-                if clean_line and len(clean_line) > 10:
-                    suggestion_count += 1
-                    suggestion_data = {
-                        "id": suggestion_count,
-                        "text": clean_line,
-                        "modifiedText": "",
-                        "rejectReason": "",
-                        "status": None
-                    }
-                    
-                    # Store suggestion in DB
-                    ai_suggestion = AISuggestion(
-                        session_id=payload.session_id,
-                        suggestion_id=suggestion_count,
-                        suggestion_text=clean_line,
-                        language=payload.language
-                    )
-                    db.add(ai_suggestion)
-                    
-                    suggestions.append(suggestion_data)
-                    if suggestion_count >= 5:
-                        break
-
-        # Fallback if no numbered items found
-        if not suggestions and raw_output:
-            sentences = re.split(r'[.!?]+\s*', raw_output)
-            for i, sentence in enumerate(sentences[:5]):
-                sentence = sentence.strip()
-                if sentence and len(sentence) > 15:
-                    suggestion_data = {
-                        "id": i + 1,
-                        "text": sentence,
-                        "modifiedText": "",
-                        "rejectReason": "",
-                        "status": None
-                    }
-                    
-                    # Store suggestion in DB
-                    ai_suggestion = AISuggestion(
-                        session_id=payload.session_id,
-                        suggestion_id=i + 1,
-                        suggestion_text=sentence,
-                        language=payload.language
-                    )
-                    db.add(ai_suggestion)
-                    
-                    suggestions.append(suggestion_data)
+        lines = raw_output.strip().split('\n')
+        for i, line in enumerate(lines):
+            if line.strip().startswith(f"{i+1}."):
+                sentence = line.strip()[len(f"{i+1}. "):].strip()
+            else:
+                sentence = line.strip()
+            
+            if sentence:
+                suggestion_data = {
+                    "id": i + 1,
+                    "text": sentence,
+                    "modifiedText": "",
+                    "rejectReason": "",
+                    "status": None
+                }
+                
+                # Store suggestion in DB
+                ai_suggestion = AISuggestion(
+                    session_id=payload.session_id,
+                    suggestion_id=i + 1,
+                    suggestion_text=sentence,
+                    language=payload.language
+                )
+                db.add(ai_suggestion)
+                
+                suggestions.append(suggestion_data)
 
         db.commit()
         return {"suggestions": suggestions}
@@ -592,6 +473,72 @@ async def modify_suggestion(payload: ModifySuggestion, db: Session = Depends(get
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to process modified suggestion: {str(e)}")
+
+# ------------------ ANALYTICS ROUTES ------------------
+def build_query(db_model, filter: AnalyticsFilter, db: Session):
+    query = db.query(db_model)
+    if filter.user_id is not None:
+        query = query.join(CodeSession, CodeSession.session_id == db_model.session_id).filter(CodeSession.user_id == filter.user_id)
+    if filter.language:
+        query = query.filter(db_model.language == filter.language)
+    if filter.start_date:
+        try:
+            start_dt = datetime.strptime(filter.start_date, '%Y-%m-%d')
+            query = query.filter(db_model.created_at >= start_dt)
+        except ValueError:
+            pass  # Ignore invalid date
+    if filter.end_date:
+        try:
+            end_dt = datetime.strptime(filter.end_date, '%Y-%m-%d') + timedelta(days=1)
+            query = query.filter(db_model.created_at < end_dt)
+        except ValueError:
+            pass  # Ignore invalid date
+    return query
+
+@app.post("/analytics/suggestions")
+def get_suggestions_stats(filter: AnalyticsFilter, db: Session = Depends(get_db)):
+    accepted_query = build_query(AcceptedSuggestion, filter, db)
+    rejected_query = build_query(RejectedSuggestion, filter, db)
+    modified_query = build_query(ModifiedSuggestion, filter, db)
+
+    accepted = accepted_query.count()
+    rejected = rejected_query.count()
+    modified = modified_query.count()
+
+    total = accepted + rejected + modified
+    percentages = {
+        'accepted': (accepted / total * 100) if total else 0,
+        'rejected': (rejected / total * 100) if total else 0,
+        'modified': (modified / total * 100) if total else 0,
+    }
+
+    return {
+        'accepted': accepted,
+        'rejected': rejected,
+        'modified': modified,
+        'percentages': percentages
+    }
+
+def get_trends(db_model, filter: AnalyticsFilter, db: Session):
+    query = build_query(db_model, filter, db)
+    query = query.with_entities(
+        func.date(db_model.created_at).label('date'),
+        func.count().label('count')
+    ).group_by('date').order_by('date')
+    results = query.all()
+    return [{'date': str(item.date), 'count': item.count} for item in results if item.date]
+
+@app.post("/analytics/trends")
+def get_trends_stats(filter: AnalyticsFilter, db: Session = Depends(get_db)):
+    accepted = get_trends(AcceptedSuggestion, filter, db)
+    rejected = get_trends(RejectedSuggestion, filter, db)
+    modified = get_trends(ModifiedSuggestion, filter, db)
+
+    return {
+        'accepted': accepted,
+        'rejected': rejected,
+        'modified': modified
+    }
 
 # Health check endpoint
 @app.get("/health")

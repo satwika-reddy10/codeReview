@@ -294,7 +294,11 @@ const SubmitPage = () => {
       <nav className="navbar">
         <div className="logo">CodeReview.</div>
         <ul className="nav-links">
-          <li><Link to="/">ANALYTICS</Link></li>
+          <li>
+            <Link to="/analytics">
+              ANALYTICS
+            </Link>
+          </li>
         </ul>
       </nav>
 
