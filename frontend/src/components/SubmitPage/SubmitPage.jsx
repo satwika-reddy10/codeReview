@@ -10,14 +10,19 @@ const SubmitPage = () => {
   const [editorLanguage, setEditorLanguage] = useState('javascript');
   const [selectedLanguage, setSelectedLanguage] = useState('javascript');
   const [aiSuggestions, setAiSuggestions] = useState([
-    { id: 1, text: 'Submit your code to get AI suggestions', modifiedText: '', rejectReason: '', status: null, loadingAction: null },
+    { id: 1, text: 'Submit your code or select repository files to get AI suggestions', modifiedText: '', rejectReason: '', status: null, loadingAction: null, category: 'Other', file_path: null },
   ]);
   const [animate, setAnimate] = useState(false);
   const [showAcceptMessage, setShowAcceptMessage] = useState(false);
   const [activeRejectId, setActiveRejectId] = useState(null);
   const [sessionId, setSessionId] = useState(null);
+  const [repoUrl, setRepoUrl] = useState('');
+  const [repoFiles, setRepoFiles] = useState([]);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [fileSearchQuery, setFileSearchQuery] = useState('');
   const editorRef = useRef(null);
   const modifiedEditorRef = useRef(null);
+  const suggestionsRef = useRef(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setAnimate(true), 100);
@@ -73,7 +78,62 @@ const SubmitPage = () => {
     }
   };
 
+  const handleRepoUrlChange = (e) => {
+    setRepoUrl(e.target.value);
+  };
+
+  const handleFetchRepoContents = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/git/repo-contents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ repo_url: repoUrl }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setRepoFiles(data.files);
+    } catch (error) {
+      console.error('Error fetching repository contents:', error);
+      setRepoFiles([]);
+      setAiSuggestions([{ 
+        id: 1, 
+        text: `Error: ${error.message}. Please check the repository URL and try again.`, 
+        modifiedText: '', 
+        rejectReason: '', 
+        status: 'error',
+        loadingAction: null,
+        category: 'Other',
+        file_path: null
+      }]);
+    }
+  };
+
+  const handleFileSelection = (filePath) => {
+    setSelectedFiles((prev) =>
+      prev.includes(filePath)
+        ? prev.filter((path) => path !== filePath)
+        : [...prev, filePath]
+    );
+  };
+
+  const handleFileSearch = (e) => {
+    setFileSearchQuery(e.target.value);
+  };
+
+  const filteredRepoFiles = repoFiles.filter((file) =>
+    file.path.toLowerCase().includes(fileSearchQuery.toLowerCase())
+  );
+
   const handleSubmitCode = async () => {
+    if (suggestionsRef.current) {
+      suggestionsRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+
     const newSessionId = generateNewSessionId();
     setSessionId(newSessionId);
     
@@ -86,7 +146,9 @@ const SubmitPage = () => {
         modifiedText: '', 
         rejectReason: '', 
         status: 'loading',
-        loadingAction: 'submit' 
+        loadingAction: 'submit',
+        category: 'Other',
+        file_path: null
       }]);
       
       const response = await fetch("http://localhost:8000/generate-suggestions", {
@@ -114,7 +176,9 @@ const SubmitPage = () => {
           modifiedText: '', 
           rejectReason: '', 
           status: null,
-          loadingAction: null 
+          loadingAction: null,
+          category: 'Other',
+          file_path: null
         }]);
       }
     } catch (error) {
@@ -125,17 +189,107 @@ const SubmitPage = () => {
         modifiedText: '', 
         rejectReason: '', 
         status: 'error',
-        loadingAction: null 
+        loadingAction: null,
+        category: 'Other',
+        file_path: null
       }]);
     }
   };
 
-  const handleAcceptSuggestion = async (suggestionId) => {
-    const suggestion = aiSuggestions.find((s) => s.id === suggestionId);
+  const handleSubmitRepoFiles = async () => {
+    if (suggestionsRef.current) {
+      suggestionsRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    const newSessionId = generateNewSessionId();
+    setSessionId(newSessionId);
+
+    try {
+      setAiSuggestions([{ 
+        id: 1, 
+        text: 'Analyzing repository files...', 
+        modifiedText: '', 
+        rejectReason: '', 
+        status: 'loading',
+        loadingAction: 'submit',
+        category: 'Other',
+        file_path: null
+      }]);
+
+      const response = await fetch('http://localhost:8000/git/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo_url: repoUrl,
+          file_paths: selectedFiles,
+          session_id: newSessionId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.reviews && data.reviews.length > 0) {
+        const allSuggestions = data.reviews.flatMap((review) =>
+          review.suggestions.map((s) => ({
+            ...s,
+            file_path: review.file_path,
+            language: review.language,
+            loadingAction: null,
+          }))
+        );
+        setAiSuggestions(allSuggestions.length > 0 ? allSuggestions : [{
+          id: 1,
+          text: 'No specific suggestions found for selected files.',
+          modifiedText: '',
+          rejectReason: '',
+          status: null,
+          loadingAction: null,
+          category: 'Other',
+          file_path: null,
+        }]);
+        // Set the first file's content in the editor
+        if (data.reviews.length > 0) {
+          setUserCode(data.reviews[0].original_code || '');
+          setEditorLanguage(data.reviews[0].language);
+          setSelectedLanguage(data.reviews[0].language);
+        }
+      } else {
+        setAiSuggestions([{
+          id: 1,
+          text: 'No specific suggestions found for selected files.',
+          modifiedText: '',
+          rejectReason: '',
+          status: null,
+          loadingAction: null,
+          category: 'Other',
+          file_path: null,
+        }]);
+      }
+    } catch (error) {
+      console.error('Error reviewing repository files:', error);
+      setAiSuggestions([{
+        id: 1,
+        text: `Error: ${error.message}. Please try again.`,
+        modifiedText: '',
+        rejectReason: '',
+        status: 'error',
+        loadingAction: null,
+        category: 'Other',
+        file_path: null,
+      }]);
+    }
+  };
+
+  const handleAcceptSuggestion = async (suggestionId, filePath) => {
+    const suggestion = aiSuggestions.find((s) => s.id === suggestionId && s.file_path === filePath);
     if (suggestion) {
       setAiSuggestions((prev) =>
         prev.map((s) =>
-          s.id === suggestionId ? { ...s, loadingAction: 'accept' } : s
+          s.id === suggestionId && s.file_path === filePath ? { ...s, loadingAction: 'accept' } : s
         )
       );
 
@@ -148,8 +302,9 @@ const SubmitPage = () => {
             suggestion_id: suggestionId,
             suggestion_text: suggestion.text,
             modified_text: suggestion.modifiedText || suggestion.text,
-            language: selectedLanguage,
-            original_code: userCode
+            language: suggestion.language || selectedLanguage,
+            original_code: userCode,
+            file_path: filePath
           }),
         });
 
@@ -165,24 +320,24 @@ const SubmitPage = () => {
 
       setAiSuggestions((prev) =>
         prev.map((s) =>
-          s.id === suggestionId ? { ...s, status: 'Accepted', loadingAction: null } : s
+          s.id === suggestionId && s.file_path === filePath ? { ...s, status: 'Accepted', loadingAction: null } : s
         )
       );
       setShowAcceptMessage(true);
     }
   };
 
-  const handleRejectSuggestion = (suggestionId) => {
-    setActiveRejectId(suggestionId);
+  const handleRejectSuggestion = (suggestionId, filePath) => {
+    setActiveRejectId(`${suggestionId}-${filePath || 'null'}`);
     setAiSuggestions((prev) =>
       prev.map((s) =>
-        s.id === suggestionId ? { ...s, loadingAction: 'reject' } : s
+        s.id === suggestionId && s.file_path === filePath ? { ...s, loadingAction: 'reject' } : s
       )
     );
   };
 
-  const handleConfirmReject = async (suggestionId) => {
-    const suggestion = aiSuggestions.find((s) => s.id === suggestionId);
+  const handleConfirmReject = async (suggestionId, filePath) => {
+    const suggestion = aiSuggestions.find((s) => s.id === suggestionId && s.file_path === filePath);
     if (suggestion) {
       try {
         await fetch("http://localhost:8000/reject-suggestion", {
@@ -193,7 +348,8 @@ const SubmitPage = () => {
             suggestion_id: suggestionId,
             suggestion_text: suggestion.text,
             reject_reason: suggestion.rejectReason,
-            language: selectedLanguage
+            language: suggestion.language || selectedLanguage,
+            file_path: filePath
           }),
         });
       } catch (error) {
@@ -202,27 +358,27 @@ const SubmitPage = () => {
 
       setAiSuggestions((prev) =>
         prev.map((s) =>
-          s.id === suggestionId ? { ...s, status: 'Rejected', loadingAction: null } : s
+          s.id === suggestionId && s.file_path === filePath ? { ...s, status: 'Rejected', loadingAction: null } : s
         )
       );
       setActiveRejectId(null);
     }
   };
 
-  const handleRejectReasonChange = (suggestionId, reason) => {
+  const handleRejectReasonChange = (suggestionId, filePath, reason) => {
     setAiSuggestions((prev) =>
       prev.map((s) =>
-        s.id === suggestionId ? { ...s, rejectReason: reason } : s
+        s.id === suggestionId && s.file_path === filePath ? { ...s, rejectReason: reason } : s
       )
     );
   };
 
-  const handleModifySuggestion = async (suggestionId, newText) => {
-    const suggestion = aiSuggestions.find((s) => s.id === suggestionId);
+  const handleModifySuggestion = async (suggestionId, filePath, modifiedText) => {
+    const suggestion = aiSuggestions.find((s) => s.id === suggestionId && s.file_path === filePath);
     if (suggestion) {
       setAiSuggestions((prev) =>
         prev.map((s) =>
-          s.id === suggestionId ? { ...s, loadingAction: 'modify' } : s
+          s.id === suggestionId && s.file_path === filePath ? { ...s, modifiedText, loadingAction: 'modify' } : s
         )
       );
 
@@ -230,12 +386,13 @@ const SubmitPage = () => {
         const response = await fetch("http://localhost:8000/modify-suggestion", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             session_id: sessionId,
             suggestion_id: suggestionId,
             original_text: suggestion.text,
-            modified_text: newText,
-            language: selectedLanguage
+            modified_text: modifiedText,
+            language: suggestion.language || selectedLanguage,
+            file_path: filePath
           }),
         });
 
@@ -243,7 +400,9 @@ const SubmitPage = () => {
           const data = await response.json();
           setAiSuggestions((prev) =>
             prev.map((s) =>
-              s.id === suggestionId ? { ...s, modifiedText: data.modified_suggestion, loadingAction: null } : s
+              s.id === suggestionId && s.file_path === filePath
+                ? { ...s, text: data.modified_suggestion, modifiedText: '', status: null, loadingAction: null }
+                : s
             )
           );
         }
@@ -253,239 +412,286 @@ const SubmitPage = () => {
     }
   };
 
-  const handleLanguageChange = (event) => {
-    setSelectedLanguage(event.target.value);
-  };
-
-  const handleModifiedCodeChange = (value) => {
-    setModifiedCode(value);
-  };
-
   const rejectionReasons = [
-    'Not applicable',
-    'Too complex',
-    'Incorrect suggestion',
-    'Other',
-  ];
+  'Not relevant',
+  'Too complex',
+  'Conflicts with style guide',
+  'Not a priority',
+  'Incorrect suggestion',
+  'Performance concerns',
+  'Security concerns',
+  'Breaks existing functionality',
+  'Already implemented',
+  'Too risky',
+  'Incompatible with dependencies',
+  'Requires significant refactoring',
+  'Not feasible',
+  'Other'
+];
 
-  const languageOptions = [
-    { value: 'python', label: 'Python' },
-    { value: 'javascript', label: 'JavaScript' },
-    { value: 'java', label: 'Java' },
-    { value: 'cpp', label: 'C++' },
-    { value: 'c', label: 'C' },
-    { value: 'csharp', label: 'C#' },
-    { value: 'typescript', label: 'TypeScript' },
-    { value: 'html', label: 'HTML' },
-    { value: 'css', label: 'CSS' },
-    { value: 'php', label: 'PHP' },
-    { value: 'ruby', label: 'Ruby' },
-    { value: 'go', label: 'Go' },
-    { value: 'rust', label: 'Rust' },
-  ];
+  const groupedSuggestions = aiSuggestions.reduce((acc, suggestion) => {
+    const key = suggestion.file_path || 'Manual Input';
+    if (!acc[key]) {
+      acc[key] = [];
+    }
+    acc[key].push(suggestion);
+    return acc;
+  }, {});
 
   return (
     <div className="submit-page">
       <div className="star-container">
         {[...Array(20)].map((_, i) => (
-          <div key={i} className="star"></div>
+          <div key={i} className="star" />
         ))}
       </div>
       <nav className="navbar">
-        <div className="logo">CodeReview.</div>
+        <div className="logo">CodeMentor</div>
         <ul className="nav-links">
-          <li>
-            <Link to="/analytics">
-              ANALYTICS
-            </Link>
-          </li>
+          <li><Link to="/">Home</Link></li>
+          <li><Link to="/submit">Submit Code</Link></li>
+          <li><Link to="/analytics">Analytics</Link></li>
+          <li><Link to="/profile">Profile</Link></li>
         </ul>
       </nav>
-
-      <section className="editor-section" id="home">
-        <div className={`editor-container left-editor ${animate ? 'slide-in-left' : ''}`}>
-          <h3>Original Code</h3>
-          <div className="editor-controls">
-            <div className="language-selector">
-              <label htmlFor="language-select">Language:</label>
-              <select
-                id="language-select"
-                value={selectedLanguage}
-                onChange={handleLanguageChange}
-                className="language-dropdown"
-              >
-                {languageOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <label className="file-upload-button">
-              <input
-                type="file"
-                accept=".js,.jsx,.ts,.tsx,.py,.c,.cpp,.java,.html,.css,.php,.rb,.go,.rs,.cs"
-                onChange={handleFileUpload}
-                className="file-upload"
-              />
-              <span className="upload-icon">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="17 8 12 3 7 8"></polyline>
-                  <line x1="12" y1="3" x2="12" y2="15"></line>
-                </svg>
-              </span>
-              Upload
-            </label>
-            <button className="submit-code-button" onClick={handleSubmitCode}>
-              Submit Code
+      <section className="editor-section">
+        <div className="git-integration">
+          <h3>Git Repository Integration</h3>
+          <div className="repo-input-container">
+            <input
+              type="text"
+              value={repoUrl}
+              onChange={handleRepoUrlChange}
+              placeholder="Enter GitHub repository URL (e.g., https://github.com/user/repo)"
+              className="repo-url-input"
+            />
+            <button onClick={handleFetchRepoContents} className="fetch-repo-button">
+              Fetch Files
             </button>
           </div>
-          <div className="editor-wrapper">
-            <Suspense fallback={<div>Loading editor...</div>}>
-              <Editor
-                height="380px"
-                language={editorLanguage}
-                value={userCode}
-                onChange={handleUserCodeChange}
-                theme="vs-dark"
-                onMount={(editor) => {
-                  editorRef.current = editor;
-                }}
-                options={{
-                  minimap: { enabled: false },
-                  scrollbar: { vertical: 'auto' },
-                  fontSize: 14,
-                  wordWrap: 'on',
-                  scrollBeyondLastLine: false,
-                }}
+          {repoFiles.length > 0 && (
+            <div className="file-selection-container">
+              <input
+                type="text"
+                value={fileSearchQuery}
+                onChange={handleFileSearch}
+                placeholder="Search files..."
+                className="file-search-input"
               />
-            </Suspense>
+              <div className="file-list">
+                {filteredRepoFiles.map((file) => (
+                  <div key={file.path} className="file-item">
+                    <input
+                      type="checkbox"
+                      checked={selectedFiles.includes(file.path)}
+                      onChange={() => handleFileSelection(file.path)}
+                    />
+                    <span>{file.path}</span>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={handleSubmitRepoFiles}
+                className="submit-repo-files-button"
+                disabled={selectedFiles.length === 0}
+              >
+                Review Selected Files
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="editor-row">
+          <div className={`editor-container left-editor ${animate ? 'slide-in-left' : ''}`}>
+            <h3>Input Code</h3>
+            <div className="editor-controls">
+              <div className="language-selector">
+                <label htmlFor="language">Language:</label>
+                <select
+                  id="language"
+                  value={selectedLanguage}
+                  onChange={(e) => setSelectedLanguage(e.target.value)}
+                  className="language-dropdown"
+                >
+                  <option value="javascript">JavaScript</option>
+                  <option value="python">Python</option>
+                  <option value="java">Java</option>
+                  <option value="cpp">C++</option>
+                  <option value="go">Go</option>
+                  <option value="rust">Rust</option>
+                  <option value="csharp">C#</option>
+                  <option value="php">PHP</option>
+                </select>
+              </div>
+              <input
+                type="file"
+                id="file-upload"
+                className="file-upload"
+                onChange={handleFileUpload}
+                accept=".js,.jsx,.ts,.tsx,.py,.c,.cpp,.java,.html,.css,.php,.rb,.go,.rs,.cs"
+              />
+              <label htmlFor="file-upload" className="file-upload-button">
+                <span className="file-upload-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                  </svg>
+                </span>
+                Upload
+              </label>
+              <button className="submit-code-button" onClick={handleSubmitCode}>
+                Submit Code
+              </button>
+            </div>
+            <div className="editor-wrapper">
+              <Suspense fallback={<div>Loading editor...</div>}>
+                <Editor
+                  height="380px"
+                  language={editorLanguage}
+                  value={userCode}
+                  onChange={handleUserCodeChange}
+                  theme="vs-dark"
+                  onMount={(editor) => {
+                    editorRef.current = editor;
+                  }}
+                  options={{
+                    minimap: { enabled: false },
+                    scrollbar: { vertical: 'auto' },
+                    fontSize: 14,
+                    wordWrap: 'on',
+                    scrollBeyondLastLine: false,
+                  }}
+                />
+              </Suspense>
+            </div>
           </div>
-          <h3 style={{ marginTop: '20px' }}>Modified Code</h3>
-          <div className="modified-editor-wrapper">
-            <Suspense fallback={<div>Loading editor...</div>}>
-              <Editor
-                height="380px"
-                language={editorLanguage}
-                value={modifiedCode}
-                onChange={handleModifiedCodeChange}
-                theme="vs-dark"
-                onMount={(editor) => {
-                  modifiedEditorRef.current = editor;
-                }}
-                options={{
-                  minimap: { enabled: false },
-                  scrollbar: { vertical: 'auto' },
-                  fontSize: 14,
-                  wordWrap: 'on',
-                  scrollBeyondLastLine: false,
-                }}
-              />
-            </Suspense>
+          <div className={`editor-container right-editor ${animate ? 'slide-in-right' : ''}`}>
+            <h3>Modified Code</h3>
+            <div className="modified-editor-wrapper">
+              <Suspense fallback={<div>Loading editor...</div>}>
+                <Editor
+                  height="380px"
+                  language={editorLanguage}
+                  value={modifiedCode}
+                  onChange={(value) => setModifiedCode(value)}
+                  theme="vs-dark"
+                  onMount={(editor) => {
+                    modifiedEditorRef.current = editor;
+                  }}
+                  options={{
+                    minimap: { enabled: false },
+                    scrollbar: { vertical: 'auto' },
+                    fontSize: 14,
+                    wordWrap: 'on',
+                    scrollBeyondLastLine: false,
+                  }}
+                />
+              </Suspense>
+            </div>
           </div>
         </div>
-        <div className={`editor-container right-editor ${animate ? 'slide-in-right' : ''}`}>
+        <div ref={suggestionsRef} className={`editor-container suggestions-editor ${animate ? 'slide-in-right' : ''}`}>
           <h3>AI Suggestions</h3>
           <div className="suggestions-wrapper">
             {showAcceptMessage && (
               <div className="accept-message">Suggestion accepted!</div>
             )}
-            {aiSuggestions.length === 0 ? (
-              <p>No suggestions available.</p>
-            ) : (
-              aiSuggestions.map((suggestion) => (
-                <div key={suggestion.id} className="suggestion-item">
-                  <div className="suggestion-text-container">
-                    <textarea
-                      value={suggestion.modifiedText || suggestion.text}
-                      onChange={(e) =>
-                        suggestion.status ? null : handleModifySuggestion(suggestion.id, e.target.value)
-                      }
-                      className="suggestion-text"
-                      disabled={!!suggestion.status}
-                    />
-                    {suggestion.loadingAction === 'submit' && (
-                      <span className="loader"></span>
-                    )}
-                  </div>
-                  {suggestion.status && (
-                    <div className={`suggestion-status ${suggestion.status.toLowerCase()}`}>
-                      {suggestion.status}
-                      {suggestion.status === 'Rejected' && suggestion.rejectReason && (
-                        <span className="reject-reason"> ({suggestion.rejectReason})</span>
+            {Object.entries(groupedSuggestions).map(([filePath, suggestions]) => (
+              <div key={filePath} className="file-suggestions">
+                <h4>{filePath === 'null' ? 'Manual Input' : filePath}</h4>
+                {suggestions.length === 0 ? (
+                  <p>No suggestions available.</p>
+                ) : (
+                  suggestions.map((suggestion) => (
+                    <div key={`${suggestion.id}-${suggestion.file_path || 'null'}`} className="suggestion-item">
+                      <div className="suggestion-text-container">
+                        <textarea
+                          value={suggestion.modifiedText || suggestion.text}
+                          onChange={(e) =>
+                            suggestion.status ? null : handleModifySuggestion(suggestion.id, suggestion.file_path, e.target.value)
+                          }
+                          className="suggestion-text"
+                          disabled={!!suggestion.status}
+                        />
+                        {suggestion.loadingAction === 'submit' && (
+                          <span className="loader"></span>
+                        )}
+                      </div>
+                      {suggestion.status && (
+                        <div className={`suggestion-status ${suggestion.status.toLowerCase()}`}>
+                          {suggestion.status}
+                          {suggestion.status === 'Rejected' && suggestion.rejectReason && (
+                            <span className="reject-reason"> ({suggestion.rejectReason})</span>
+                          )}
+                        </div>
+                      )}
+                      {suggestion.category && (
+                        <span className={`suggestion-category ${suggestion.category.toLowerCase().replace(/\s+/g, '-')}`}>
+                          {suggestion.category}
+                        </span>
+                      )}
+                      <div className="suggestion-actions">
+                        <button
+                          onClick={() => handleAcceptSuggestion(suggestion.id, suggestion.file_path)}
+                          className="action-button accept"
+                          disabled={!!suggestion.status || suggestion.loadingAction || suggestion.status === 'loading' || suggestion.status === 'error'}
+                        >
+                          Accept
+                          {suggestion.loadingAction === 'accept' && <span className="loader"></span>}
+                        </button>
+                        <button
+                          onClick={() => handleRejectSuggestion(suggestion.id, suggestion.file_path)}
+                          className="action-button reject"
+                          disabled={!!suggestion.status || suggestion.loadingAction || suggestion.status === 'loading' || suggestion.status === 'error'}
+                        >
+                          Reject
+                          {suggestion.loadingAction === 'reject' && <span className="loader"></span>}
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleModifySuggestion(
+                              suggestion.id,
+                              suggestion.file_path,
+                              suggestion.modifiedText || suggestion.text
+                            )
+                          }
+                          className="action-button modify"
+                          disabled={!!suggestion.status || suggestion.loadingAction || suggestion.status === 'loading' || suggestion.status === 'error'}
+                        >
+                          Modify
+                          {suggestion.loadingAction === 'modify' && <span className="loader"></span>}
+                        </button>
+                      </div>
+                      {activeRejectId === `${suggestion.id}-${suggestion.file_path || 'null'}` && !suggestion.status && (
+                        <div className="reject-reason-container">
+                          <select
+                            value={suggestion.rejectReason}
+                            onChange={(e) =>
+                              handleRejectReasonChange(suggestion.id, suggestion.file_path, e.target.value)
+                            }
+                            className="reject-reason-select"
+                          >
+                            <option value="">Select a reason</option>
+                            {rejectionReasons.map((reason) => (
+                              <option key={reason} value={reason}>
+                                {reason}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => handleConfirmReject(suggestion.id, suggestion.file_path)}
+                            className="confirm-reject-button"
+                            disabled={!suggestion.rejectReason}
+                          >
+                            Confirm Reject
+                          </button>
+                        </div>
                       )}
                     </div>
-                  )}
-                  <div className="suggestion-actions">
-                    <button
-                      onClick={() => handleAcceptSuggestion(suggestion.id)}
-                      className="action-button accept"
-                      disabled={!!suggestion.status || suggestion.loadingAction || suggestion.status === 'loading' || suggestion.status === 'error'}
-                    >
-                      Accept
-                      {suggestion.loadingAction === 'accept' && <span className="loader"></span>}
-                    </button>
-                    <button
-                      onClick={() => handleRejectSuggestion(suggestion.id)}
-                      className="action-button reject"
-                      disabled={!!suggestion.status || suggestion.loadingAction || suggestion.status === 'loading' || suggestion.status === 'error'}
-                    >
-                      Reject
-                      {suggestion.loadingAction === 'reject' && <span className="loader"></span>}
-                    </button>
-                    <button
-                      onClick={() =>
-                        handleModifySuggestion(
-                          suggestion.id,
-                          suggestion.modifiedText || suggestion.text
-                        )
-                      }
-                      className="action-button modify"
-                      disabled={!!suggestion.status || suggestion.loadingAction || suggestion.status === 'loading' || suggestion.status === 'error'}
-                    >
-                      Modify
-                      {suggestion.loadingAction === 'modify' && <span className="loader"></span>}
-                    </button>
-                  </div>
-                  {activeRejectId === suggestion.id && !suggestion.status && (
-                    <div className="reject-reason-container">
-                      <select
-                        value={suggestion.rejectReason}
-                        onChange={(e) =>
-                          handleRejectReasonChange(suggestion.id, e.target.value)
-                        }
-                        className="reject-reason-select"
-                      >
-                        <option value="">Select a reason</option>
-                        {rejectionReasons.map((reason) => (
-                          <option key={reason} value={reason}>
-                            {reason}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => handleConfirmReject(suggestion.id)}
-                        className="confirm-reject-button"
-                        disabled={!suggestion.rejectReason}
-                      >
-                        Confirm Reject
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
+                  ))
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </section>
