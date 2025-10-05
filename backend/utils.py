@@ -1,10 +1,9 @@
-# utils.py
-from database import UserPattern # Changed from .database to database
-from schemas import UserCreate # Changed from .schemas to schemas
+from database import UserPattern
+from schemas import UserCreate
 import bcrypt
 from typing import List
 import os
-from dotenv import load_dotenv # This is typically not relative
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -20,15 +19,16 @@ if len(SECRET_KEY) < 32:
     raise ValueError("SECRET_KEY must be at least 32 characters long")
 
 def hash_password(password: str) -> bytes:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+    if isinstance(password, str):
+        password_bytes = password.encode('utf-8')
+    else:
+        raise ValueError("Password must be a string")
+    return bcrypt.hashpw(password_bytes, bcrypt.gensalt())
 
-def verify_password(password: bytes, hashed: str) -> bool:
-    return bcrypt.checkpw(password, hashed.encode("utf-8"))
+def verify_password(password: bytes, hashed: bytes) -> bool:
+    return bcrypt.checkpw(password, hashed)
 
 def summarize_user_patterns(patterns: List[UserPattern]) -> str:
-    """
-    Summarizes user feedback patterns into a natural-language context for the AI.
-    """
     if not patterns:
         return "No prior feedback available."
 
@@ -64,8 +64,8 @@ def get_google_client_config():
         "web": {
             "client_id": GOOGLE_CLIENT_ID,
             "client_secret": GOOGLE_CLIENT_SECRET,
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth", # Ensure NO spaces here
-            "token_uri": "https://oauth2.googleapis.com/token",     # Ensure NO spaces here
-            "redirect_uris": ["http://localhost:8000/auth/google/callback"] # Ensure NO spaces here
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": ["http://localhost:8000/auth/google/callback"]
         }
     }

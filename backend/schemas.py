@@ -2,12 +2,12 @@ from pydantic import BaseModel, EmailStr, Field, validator
 from typing import List, Optional
 
 class UserCreate(BaseModel):
-    username: EmailStr
-    password: str = Field(..., min_length=8)
+    username: str
+    password: str
 
 class UserLogin(BaseModel):
-    username: EmailStr
-    password: str = Field(..., min_length=8)
+    username: str
+    password: str
 
 class CodeInput(BaseModel):
     code: str

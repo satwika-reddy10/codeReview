@@ -3,8 +3,8 @@ from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, timedelta
-from database import get_db, AISuggestion, AcceptedSuggestion, RejectedSuggestion, ModifiedSuggestion, SuggestionLatency, CodeSession, UserPattern # Changed from .database to database
-from schemas import AnalyticsFilter # Changed from .schemas to schemas
+from database import get_db, AISuggestion, AcceptedSuggestion, RejectedSuggestion, ModifiedSuggestion, SuggestionLatency, CodeSession, UserPattern
+from schemas import AnalyticsFilter
 
 def build_query(db_model, filter: AnalyticsFilter, db: Session):
     query = db.query(db_model)
@@ -26,7 +26,7 @@ def build_query(db_model, filter: AnalyticsFilter, db: Session):
             pass  # Ignore invalid date
     return query
 
-def get_suggestions_stats(filter: AnalyticsFilter, db: Session = Depends(get_db)): # Keep Depends here
+def get_suggestions_stats(filter: AnalyticsFilter, db: Session = Depends(get_db)):
     accepted_query = build_query(AcceptedSuggestion, filter, db)
     rejected_query = build_query(RejectedSuggestion, filter, db)
     modified_query = build_query(ModifiedSuggestion, filter, db)
@@ -49,7 +49,7 @@ def get_suggestions_stats(filter: AnalyticsFilter, db: Session = Depends(get_db)
         'percentages': percentages
     }
 
-def get_detection_accuracy(filter: AnalyticsFilter, db: Session = Depends(get_db)): # Keep Depends here
+def get_detection_accuracy(filter: AnalyticsFilter, db: Session = Depends(get_db)):
     ai_suggestion_query = build_query(AISuggestion, filter, db)
     accepted_query = build_query(AcceptedSuggestion, filter, db)
     modified_query = build_query(ModifiedSuggestion, filter, db)
@@ -63,7 +63,7 @@ def get_detection_accuracy(filter: AnalyticsFilter, db: Session = Depends(get_db
 
     return {'accuracy': accuracy}
 
-def get_latency_stats(filter: AnalyticsFilter, db: Session = Depends(get_db)): # Keep Depends here
+def get_latency_stats(filter: AnalyticsFilter, db: Session = Depends(get_db)):
     query = build_query(SuggestionLatency, filter, db)
     query = query.with_entities(
         func.date(SuggestionLatency.created_at).label('date'),
@@ -72,10 +72,15 @@ def get_latency_stats(filter: AnalyticsFilter, db: Session = Depends(get_db)): #
     results = query.all()
     return [{'date': str(item.date), 'latency': item.latency} for item in results if item.date]
 
-def get_learning_effectiveness(filter: AnalyticsFilter, db: Session = Depends(get_db)): # Keep Depends here
-    # Count suggestions that match patterns in user_patterns
+def get_learning_effectiveness(filter: AnalyticsFilter, db: Session = Depends(get_db)):
+    # Ensure user_id is provided, otherwise return empty data
+    if filter.user_id is None:
+        return []
+
+    # Count user's suggestions that match their patterns
     query = build_query(AISuggestion, filter, db)
     query = query.join(UserPattern, UserPattern.session_id == AISuggestion.session_id).filter(
+        UserPattern.user_id == filter.user_id,
         UserPattern.pattern_type.in_(['accepted', 'modified'])
     )
     query = query.with_entities(
@@ -92,7 +97,7 @@ def get_learning_effectiveness(filter: AnalyticsFilter, db: Session = Depends(ge
     aligned_results = query.all()
     total_results = total_suggestions_query.all()
 
-    # Merge results to calculate effectiveness
+    # Merge results to calculate user's effectiveness
     effectiveness_data = []
     total_dict = {item.date: item.total_count for item in total_results}
     for item in aligned_results:
@@ -111,7 +116,7 @@ def get_trends(db_model, filter: AnalyticsFilter, db: Session):
     results = query.all()
     return [{'date': str(item.date), 'count': item.count} for item in results if item.date]
 
-def get_trends_stats(filter: AnalyticsFilter, db: Session = Depends(get_db)): # Keep Depends here
+def get_trends_stats(filter: AnalyticsFilter, db: Session = Depends(get_db)):
     accepted = get_trends(AcceptedSuggestion, filter, db)
     rejected = get_trends(RejectedSuggestion, filter, db)
     modified = get_trends(ModifiedSuggestion, filter, db)

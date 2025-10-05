@@ -1,13 +1,13 @@
 # auth_routes.py
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
-from database import get_db, User # Changed from .database to database
-from schemas import UserCreate, UserLogin # Changed from .schemas to schemas
-from utils import hash_password, verify_password # Changed from .utils to utils
+from database import get_db, User
+from schemas import UserCreate, UserLogin
+from utils import hash_password, verify_password
 import bcrypt
 
 # ------------------ AUTH ROUTES ------------------
-def signup(user: UserCreate, db: Session = Depends(get_db)): # Keep Depends here
+def signup(user: UserCreate, db: Session = Depends(get_db)):
     try:
         existing_user = db.query(User).filter(User.username == user.username).first()
         if existing_user:
@@ -22,7 +22,7 @@ def signup(user: UserCreate, db: Session = Depends(get_db)): # Keep Depends here
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
-def login(user: UserLogin, db: Session = Depends(get_db)): # Keep Depends here
+def login(user: UserLogin, db: Session = Depends(get_db)):
     try:
         db_user = db.query(User).filter(User.username == user.username).first()
         if not db_user:
