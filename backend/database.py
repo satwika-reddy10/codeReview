@@ -36,6 +36,8 @@ class User(Base):
     password = Column(String(200), nullable=True)  # Nullable for Google auth
     google_id = Column(String, unique=True, nullable=True)  # New field for Google ID
     is_google_user = Column(Boolean, default=False)  # New field to track Google users
+    role = Column(String, default='developer')  # New field: 'admin' or 'developer'
+    created_at = Column(DateTime, default=datetime.utcnow)  # New field for timestamp
 
 class Repository(Base):
     __tablename__ = "repositories"

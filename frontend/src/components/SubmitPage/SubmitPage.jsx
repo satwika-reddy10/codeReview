@@ -20,12 +20,18 @@ const SubmitPage = () => {
   const [repoFiles, setRepoFiles] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [fileSearchQuery, setFileSearchQuery] = useState('');
+  const [userId, setUserId] = useState(null);
   const editorRef = useRef(null);
   const modifiedEditorRef = useRef(null);
   const suggestionsRef = useRef(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setAnimate(true), 100);
+    // Get user_id from localStorage
+    const storedUserId = localStorage.getItem('user_id');
+    if (storedUserId) {
+      setUserId(parseInt(storedUserId));
+    }
     return () => clearTimeout(timer);
   }, []);
 
@@ -130,71 +136,74 @@ const SubmitPage = () => {
   );
 
   const handleSubmitCode = async () => {
-    if (suggestionsRef.current) {
-      suggestionsRef.current.scrollIntoView({ behavior: 'smooth' });
+  if (suggestionsRef.current) {
+    suggestionsRef.current.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  const newSessionId = generateNewSessionId();
+  setSessionId(newSessionId);
+  
+  setEditorLanguage(selectedLanguage);
+  
+  try {
+    setAiSuggestions([{ 
+      id: 1, 
+      text: 'Analyzing your code...', 
+      modifiedText: '', 
+      rejectReason: '', 
+      status: 'loading',
+      loadingAction: 'submit',
+      category: 'Other',
+      file_path: null
+    }]);
+    
+    const userId = parseInt(localStorage.getItem('user_id'));
+    
+    const response = await fetch("http://localhost:8000/generate-suggestions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        code: userCode, 
+        language: selectedLanguage,
+        session_id: newSessionId,
+        user_id: userId  // Add user_id to the request
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Server error: ${response.status}`);
     }
 
-    const newSessionId = generateNewSessionId();
-    setSessionId(newSessionId);
-    
-    setEditorLanguage(selectedLanguage);
-    
-    try {
+    const data = await response.json();
+    if (data.suggestions && data.suggestions.length > 0) {
+      setAiSuggestions(data.suggestions.map(s => ({ ...s, loadingAction: null })));
+    } else {
       setAiSuggestions([{ 
         id: 1, 
-        text: 'Analyzing your code...', 
+        text: 'No specific suggestions found. Your code looks good!', 
         modifiedText: '', 
         rejectReason: '', 
-        status: 'loading',
-        loadingAction: 'submit',
-        category: 'Other',
-        file_path: null
-      }]);
-      
-      const response = await fetch("http://localhost:8000/generate-suggestions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          code: userCode, 
-          language: selectedLanguage,
-          session_id: newSessionId
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Server error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (data.suggestions && data.suggestions.length > 0) {
-        setAiSuggestions(data.suggestions.map(s => ({ ...s, loadingAction: null })));
-      } else {
-        setAiSuggestions([{ 
-          id: 1, 
-          text: 'No specific suggestions found. Your code looks good!', 
-          modifiedText: '', 
-          rejectReason: '', 
-          status: null,
-          loadingAction: null,
-          category: 'Other',
-          file_path: null
-        }]);
-      }
-    } catch (error) {
-      console.error("Error fetching suggestions:", error);
-      setAiSuggestions([{ 
-        id: 1, 
-        text: `Error: ${error.message}. Please try again.`, 
-        modifiedText: '', 
-        rejectReason: '', 
-        status: 'error',
+        status: null,
         loadingAction: null,
         category: 'Other',
         file_path: null
       }]);
     }
-  };
+  } catch (error) {
+    console.error("Error fetching suggestions:", error);
+    setAiSuggestions([{ 
+      id: 1, 
+      text: `Error: ${error.message}. Please try again.`, 
+      modifiedText: '', 
+      rejectReason: '', 
+      status: 'error',
+      loadingAction: null,
+      category: 'Other',
+      file_path: null
+    }]);
+  }
+};
 
   const handleSubmitRepoFiles = async () => {
     if (suggestionsRef.current) {
@@ -223,6 +232,7 @@ const SubmitPage = () => {
           repo_url: repoUrl,
           file_paths: selectedFiles,
           session_id: newSessionId,
+          user_id: userId  // Send user_id with the request
         }),
       });
 
@@ -304,7 +314,8 @@ const SubmitPage = () => {
             modified_text: suggestion.modifiedText || suggestion.text,
             language: suggestion.language || selectedLanguage,
             original_code: userCode,
-            file_path: filePath
+            file_path: filePath,
+            user_id: userId  // Send user_id with the request
           }),
         });
 
@@ -349,7 +360,8 @@ const SubmitPage = () => {
             suggestion_text: suggestion.text,
             reject_reason: suggestion.rejectReason,
             language: suggestion.language || selectedLanguage,
-            file_path: filePath
+            file_path: filePath,
+            user_id: userId  // Send user_id with the request
           }),
         });
       } catch (error) {
@@ -392,7 +404,8 @@ const SubmitPage = () => {
             original_text: suggestion.text,
             modified_text: modifiedText,
             language: suggestion.language || selectedLanguage,
-            file_path: filePath
+            file_path: filePath,
+            user_id: userId  // Send user_id with the request
           }),
         });
 
@@ -413,21 +426,21 @@ const SubmitPage = () => {
   };
 
   const rejectionReasons = [
-  'Not relevant',
-  'Too complex',
-  'Conflicts with style guide',
-  'Not a priority',
-  'Incorrect suggestion',
-  'Performance concerns',
-  'Security concerns',
-  'Breaks existing functionality',
-  'Already implemented',
-  'Too risky',
-  'Incompatible with dependencies',
-  'Requires significant refactoring',
-  'Not feasible',
-  'Other'
-];
+    'Not relevant',
+    'Too complex',
+    'Conflicts with style guide',
+    'Not a priority',
+    'Incorrect suggestion',
+    'Performance concerns',
+    'Security concerns',
+    'Breaks existing functionality',
+    'Already implemented',
+    'Too risky',
+    'Incompatible with dependencies',
+    'Requires significant refactoring',
+    'Not feasible',
+    'Other'
+  ];
 
   const groupedSuggestions = aiSuggestions.reduce((acc, suggestion) => {
     const key = suggestion.file_path || 'Manual Input';

@@ -1,18 +1,28 @@
 from pydantic import BaseModel, EmailStr, Field, validator
 from typing import List, Optional
+from datetime import datetime
 
 class UserCreate(BaseModel):
     username: str
     password: str
+    role: str = 'developer'
+    
+    @validator('role')
+    def validate_role(cls, v):
+        if v not in ['admin', 'developer']:
+            raise ValueError('Role must be either "admin" or "developer"')
+        return v
 
 class UserLogin(BaseModel):
     username: str
     password: str
 
+# schemas.py - Update CodeInput model
 class CodeInput(BaseModel):
     code: str
     language: str
     session_id: str
+    user_id: Optional[int] = None  # Add user_id field
     
     @validator('code')
     def code_must_not_be_empty(cls, v):
@@ -47,6 +57,7 @@ class GitFileReviewRequest(BaseModel):
     repo_url: str
     file_paths: List[str]
     session_id: str
+    user_id: Optional[int] = None  # Add user_id field
 
     @validator('repo_url')
     def validate_repo_url(cls, v):
@@ -70,7 +81,8 @@ class SuggestionAction(BaseModel):
     suggestion_id: int
     suggestion_text: str
     language: str
-    file_path: Optional[str] = None  # New field for file path
+    file_path: Optional[str] = None
+    user_id: Optional[int] = None  # Add user_id field
 
 class AcceptSuggestion(SuggestionAction):
     modified_text: str
@@ -85,10 +97,16 @@ class ModifySuggestion(BaseModel):
     original_text: str
     modified_text: str
     language: str
-    file_path: Optional[str] = None  # New field for file path
+    file_path: Optional[str] = None
+    user_id: Optional[int] = None  # Add user_id field
 
 class AnalyticsFilter(BaseModel):
     user_id: Optional[int] = None
     language: Optional[str] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    role: str

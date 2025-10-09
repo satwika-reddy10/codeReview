@@ -10,9 +10,10 @@ load_dotenv()
 from app import app
 from auth_routes import signup, login
 from suggestion_routes import generate_suggestions, accept_suggestion, reject_suggestion, modify_suggestion
-from analytics_routes import get_suggestions_stats, get_detection_accuracy, get_latency_stats, get_learning_effectiveness, get_trends_stats
+from analytics_routes import get_suggestions_stats, get_detection_accuracy, get_latency_stats, get_learning_effectiveness, get_trends_stats, get_error_types, debug_analytics_data
 from google_oauth_routes import google_auth, google_auth_callback
 from git_routes import get_repo_contents, review_repo_files
+from admin_routes import get_all_users, get_user_by_id, get_developers
 
 # Add the routes to the app
 app.post("/signup")(signup)
@@ -26,10 +27,19 @@ app.post("/analytics/detection-accuracy")(get_detection_accuracy)
 app.post("/analytics/latency")(get_latency_stats)
 app.post("/analytics/learning-effectiveness")(get_learning_effectiveness)
 app.post("/analytics/trends")(get_trends_stats)
+app.post("/analytics/error-types")(get_error_types)
 app.get("/auth/google")(google_auth)
 app.get("/auth/google/callback")(google_auth_callback)
 app.post("/git/repo-contents")(get_repo_contents)
 app.post("/git/review")(review_repo_files)
+
+# Admin routes
+app.get("/admin/users")(get_all_users)
+app.get("/admin/users/{user_id}")(get_user_by_id)
+app.get("/admin/developers")(get_developers)
+
+# Debug route
+app.get("/debug/analytics")(debug_analytics_data)
 
 # Add CORS middleware
 app.add_middleware(

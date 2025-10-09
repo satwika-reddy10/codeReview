@@ -7,6 +7,7 @@ const LoginPage = () => {
   const [formState, setFormState] = useState({
     username: '',
     password: '',
+    role: 'developer'
   });
   const [isLogin, setIsLogin] = useState(true);
 
@@ -44,7 +45,18 @@ const LoginPage = () => {
       }
       const data = await response.json();
       console.log('Login successful:', data);
-      navigate('/submit');
+      
+      // Store user info in localStorage
+      localStorage.setItem('user_role', data.role);
+      localStorage.setItem('user_id', data.user_id);
+      localStorage.setItem('username', data.username);
+      
+      // Redirect based on role
+      if (data.role === 'admin') {
+        navigate('/admin-dashboard');
+      } else {
+        navigate('/submit');
+      }
     } catch (error) {
       alert(`Error: ${error.message}`);
     }
@@ -68,7 +80,11 @@ const LoginPage = () => {
       const response = await fetch('http://localhost:8000/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: formState.username, password: formState.password }),
+        body: JSON.stringify({ 
+          username: formState.username, 
+          password: formState.password,
+          role: formState.role
+        }),
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -89,32 +105,15 @@ const LoginPage = () => {
 
   const handleToggleForm = () => {
     setIsLogin(!isLogin);
-    setFormState({ username: '', password: '' });
+    setFormState({ username: '', password: '', role: 'developer' });
   };
 
   return (
     <div className="login-page">
       <div className="star-container">
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
-        <div className="star"></div>
+        {[...Array(20)].map((_, i) => (
+          <div key={i} className="star"></div>
+        ))}
       </div>
       <nav className="navbar">
         <div className="logo">CodeReview.</div>
@@ -149,6 +148,35 @@ const LoginPage = () => {
               />
               {isLogin && <a href="#forgot" className="forgot-password">Forgot Password?</a>}
             </div>
+            
+            {!isLogin && (
+              <div className="input-group">
+                <label htmlFor="role">Role</label>
+                <div className="role-selector">
+                  <label className="role-option">
+                    <input
+                      type="radio"
+                      name="role"
+                      value="developer"
+                      checked={formState.role === 'developer'}
+                      onChange={handleChange}
+                    />
+                    <span>Developer</span>
+                  </label>
+                  <label className="role-option">
+                    <input
+                      type="radio"
+                      name="role"
+                      value="admin"
+                      checked={formState.role === 'admin'}
+                      onChange={handleChange}
+                    />
+                    <span>Admin</span>
+                  </label>
+                </div>
+              </div>
+            )}
+            
             <button type="submit" className="login-btn">
               {isLogin ? 'Log in' : 'Sign up'}
             </button>

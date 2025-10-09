@@ -1,3 +1,4 @@
+# suggestion_routes.py
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 import re
@@ -9,11 +10,12 @@ from utils import summarize_user_patterns
 from datetime import datetime
 import time
 
-async def process_code_for_review(code: str, language: str, session_id: str, file_path: str | None, db: Session):
+async def process_code_for_review(code: str, language: str, session_id: str, file_path: str | None, db: Session, user_id: int = None):
     try:
-        # Store code session
+        # Store code session with user_id
         code_session = CodeSession(
             session_id=session_id,
+            user_id=user_id,  # Store the user_id
             language=language,
             code=code
         )
@@ -125,12 +127,17 @@ async def process_code_for_review(code: str, language: str, session_id: str, fil
 
 async def generate_suggestions(payload: CodeInput, db: Session = Depends(get_db)):
     try:
+        # Get user_id from the request context (you'll need to modify this based on your auth setup)
+        # For now, we'll get it from localStorage on the frontend and pass it in the payload
+        user_id = getattr(payload, 'user_id', None)
+        
         suggestions = await process_code_for_review(
             code=payload.code,
             language=payload.language,
             session_id=payload.session_id,
             file_path=None,
-            db=db
+            db=db,
+            user_id=user_id
         )
         
         if not suggestions:

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
-import { Pie, Line } from 'react-chartjs-2';
-import { Chart as ChartJS, ArcElement, LineElement, PointElement, LinearScale, CategoryScale, Title, Tooltip, Legend } from 'chart.js';
+import { Pie, Line, Bar } from 'react-chartjs-2';
+import { Chart as ChartJS, ArcElement, LineElement, PointElement, LinearScale, CategoryScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import './Analytics.css';
 
-ChartJS.register(ArcElement, LineElement, PointElement, LinearScale, CategoryScale, Title, Tooltip, Legend);
+ChartJS.register(ArcElement, LineElement, PointElement, LinearScale, CategoryScale, BarElement, Title, Tooltip, Legend);
 
 const Analytics = () => {
   const [suggestionData, setSuggestionData] = useState({
@@ -14,86 +14,85 @@ const Analytics = () => {
     modified: 0,
     percentages: { accepted: 0, rejected: 0, modified: 0 },
   });
-  const [trendData, setTrendData] = useState({ accepted: [], rejected: [], modified: [] });
+  const [trendData, setTrendData] = useState({ 
+    accepted: [], 
+    rejected: [], 
+    modified: [] 
+  });
   const [detectionAccuracy, setDetectionAccuracy] = useState(0);
   const [latencyData, setLatencyData] = useState([]);
   const [learningEffectivenessData, setLearningEffectivenessData] = useState([]);
-  const [filters, setFilters] = useState({
-    user_id: null, // Replace with actual user ID from auth context
-  });
+  const [errorTypesData, setErrorTypesData] = useState([]);
+  const [filters, setFilters] = useState({});
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Fetch suggestion counts
-    axios
-      .post('http://localhost:8000/analytics/suggestions', filters)
-      .then((res) => {
-        setSuggestionData(res.data);
-        setError(null);
-      })
-      .catch((err) => {
-        console.error('Error fetching suggestion data:', err);
-        setError('Failed to load suggestion data. Please try again.');
-      });
+    const userId = parseInt(localStorage.getItem('user_id'));
+    if (!userId) {
+      setError('User not logged in');
+      setLoading(false);
+      return;
+    }
 
-    // Fetch trend data
-    axios
-      .post('http://localhost:8000/analytics/trends', filters)
-      .then((res) => {
-        setTrendData(res.data);
-        setError(null);
-      })
-      .catch((err) => {
-        console.error('Error fetching trend data:', err);
-        setError('Failed to load trend data. Please try again.');
-      });
+    // Set filters to only show current user's data
+    const userFilters = {
+      user_id: userId,
+      language: null,
+      start_date: null,
+      end_date: null,
+    };
+    
+    setFilters(userFilters);
+    fetchAnalyticsData(userFilters);
+  }, []);
 
-    // Fetch detection accuracy
-    axios
-      .post('http://localhost:8000/analytics/detection-accuracy', filters)
-      .then((res) => {
-        setDetectionAccuracy(res.data.accuracy);
-        setError(null);
-      })
-      .catch((err) => {
-        console.error('Error fetching detection accuracy:', err);
-        setError('Failed to load detection accuracy. Please try again.');
-      });
+  const fetchAnalyticsData = async (filters) => {
+    try {
+      setLoading(true);
+      
+      // Fetch all analytics data in parallel
+      const [
+        suggestionsRes,
+        trendsRes,
+        accuracyRes,
+        latencyRes,
+        effectivenessRes,
+        errorTypesRes
+      ] = await Promise.all([
+        axios.post('http://localhost:8000/analytics/suggestions', filters),
+        axios.post('http://localhost:8000/analytics/trends', filters),
+        axios.post('http://localhost:8000/analytics/detection-accuracy', filters),
+        axios.post('http://localhost:8000/analytics/latency', filters),
+        axios.post('http://localhost:8000/analytics/learning-effectiveness', filters),
+        axios.post('http://localhost:8000/analytics/error-types', filters)
+      ]);
 
-    // Fetch latency data
-    axios
-      .post('http://localhost:8000/analytics/latency', filters)
-      .then((res) => {
-        setLatencyData(res.data);
-        setError(null);
-      })
-      .catch((err) => {
-        console.error('Error fetching latency data:', err);
-        setError('Failed to load latency data. Please try again.');
-      });
-
-    // Fetch learning effectiveness data
-    axios
-      .post('http://localhost:8000/analytics/learning-effectiveness', filters)
-      .then((res) => {
-        setLearningEffectivenessData(res.data);
-        setError(null);
-      })
-      .catch((err) => {
-        console.error('Error fetching learning effectiveness data:', err);
-        setError('Failed to load learning effectiveness data. Please try again.');
-      });
-  }, [filters]);
+      setSuggestionData(suggestionsRes.data);
+      setTrendData(trendsRes.data);
+      setDetectionAccuracy(accuracyRes.data.accuracy);
+      setLatencyData(latencyRes.data.overall_latency || []);
+      setLearningEffectivenessData(effectivenessRes.data.effectiveness || []);
+      setErrorTypesData(errorTypesRes.data.overall_error_types || []);
+      
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching analytics data:', err);
+      setError('Failed to load analytics data. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Pie chart data for suggestion breakdown
   const pieChartData = {
-    labels: ['Acceptance Rate', 'Rejection Rate', 'Modification Rate'],
+    labels: ['Accepted', 'Rejected', 'Modified'],
     datasets: [
       {
         data: [suggestionData.accepted, suggestionData.rejected, suggestionData.modified],
         backgroundColor: ['#4CAF50', '#F44336', '#FF9800'],
         borderColor: '#ffffff',
-        borderWidth: 1,
+        borderWidth: 2,
       },
     ],
   };
@@ -103,25 +102,28 @@ const Analytics = () => {
     labels: trendData.accepted?.map((item) => item.date) || [],
     datasets: [
       {
-        label: 'Accepted Suggestions',
+        label: 'Accepted',
         data: trendData.accepted?.map((item) => item.count) || [],
         borderColor: '#4CAF50',
-        backgroundColor: 'rgba(76, 175, 80, 0.2)',
+        backgroundColor: 'rgba(76, 175, 80, 0.1)',
         fill: true,
+        tension: 0.4,
       },
       {
-        label: 'Rejected Suggestions',
+        label: 'Rejected',
         data: trendData.rejected?.map((item) => item.count) || [],
         borderColor: '#F44336',
-        backgroundColor: 'rgba(244, 67, 54, 0.2)',
+        backgroundColor: 'rgba(244, 67, 54, 0.1)',
         fill: true,
+        tension: 0.4,
       },
       {
-        label: 'Modified Suggestions',
+        label: 'Modified',
         data: trendData.modified?.map((item) => item.count) || [],
         borderColor: '#FF9800',
-        backgroundColor: 'rgba(255, 152, 0, 0.2)',
+        backgroundColor: 'rgba(255, 152, 0, 0.1)',
         fill: true,
+        tension: 0.4,
       },
     ],
   };
@@ -134,8 +136,9 @@ const Analytics = () => {
         label: 'Average Latency (ms)',
         data: latencyData?.map((item) => item.latency) || [],
         borderColor: '#2196F3',
-        backgroundColor: 'rgba(33, 150, 243, 0.2)',
+        backgroundColor: 'rgba(33, 150, 243, 0.1)',
         fill: true,
+        tension: 0.4,
       },
     ],
   };
@@ -148,21 +151,58 @@ const Analytics = () => {
         label: 'Learning Effectiveness (%)',
         data: learningEffectivenessData?.map((item) => item.effectiveness) || [],
         borderColor: '#9C27B0',
-        backgroundColor: 'rgba(156, 39, 176, 0.2)',
+        backgroundColor: 'rgba(156, 39, 176, 0.1)',
         fill: true,
+        tension: 0.4,
       },
     ],
   };
 
-  // Common chart options to control size and prevent overflow
+  // Bar chart for error types
+  const errorTypesChartData = {
+    labels: errorTypesData?.map((item) => item.severity) || [],
+    datasets: [
+      {
+        label: 'Error Count',
+        data: errorTypesData?.map((item) => item.count) || [],
+        backgroundColor: [
+          '#FF6384', // High
+          '#36A2EB', // Medium  
+          '#FFCE56', // Low
+          '#4BC0C0', // Unknown
+        ],
+        borderColor: '#ffffff',
+        borderWidth: 2,
+      },
+    ],
+  };
+
   const chartOptions = {
     responsive: true,
-    maintainAspectRatio: true,
-    aspectRatio: 1.5,
+    maintainAspectRatio: false,
     plugins: {
-      legend: { position: 'top' },
+      legend: {
+        position: 'top',
+      },
+      title: {
+        display: true,
+        font: {
+          size: 16
+        }
+      },
     },
   };
+
+  if (loading) {
+    return (
+      <div className="analytics-page">
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <p>Loading analytics data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="analytics-page">
@@ -184,102 +224,202 @@ const Analytics = () => {
       </nav>
 
       <div className="analytics-container">
-        <h1>Analytics Dashboard</h1>
-        {error && <div className="error-message">{error}</div>}
-
-        <div className="chart-section">
-          <div className="chart-card detection-accuracy">
-            <h2>Detection Accuracy</h2>
-            <div className="metric-display">
-              <p>{detectionAccuracy.toFixed(1)}%</p>
-              <span>Percentage of relevant suggestions (Accepted + Modified)</span>
-            </div>
+        <h1>My Analytics Dashboard</h1>
+        
+        {error && (
+          <div className="error-message">
+            {error}
           </div>
+        )}
 
-          <div className="top-charts">
-            <div className="chart-card">
-              <h2>Suggestion Breakdown</h2>
-              <Pie
-                data={pieChartData}
+        {/* Key Metrics Summary */}
+        <div className="metrics-summary">
+          <div className="metric-card">
+            <h3>Detection Accuracy</h3>
+            <div className="metric-value">{detectionAccuracy.toFixed(1)}%</div>
+            <p>Relevant Suggestions</p>
+          </div>
+          <div className="metric-card">
+            <h3>Accepted</h3>
+            <div className="metric-value">{suggestionData.accepted}</div>
+            <p>Suggestions</p>
+          </div>
+          <div className="metric-card">
+            <h3>Rejected</h3>
+            <div className="metric-value">{suggestionData.rejected}</div>
+            <p>Suggestions</p>
+          </div>
+          <div className="metric-card">
+            <h3>Modified</h3>
+            <div className="metric-value">{suggestionData.modified}</div>
+            <p>Suggestions</p>
+          </div>
+        </div>
+
+        {/* Charts Grid */}
+        <div className="charts-grid">
+          {/* Suggestion Breakdown */}
+          <div className="chart-card">
+            <h2>Suggestion Breakdown</h2>
+            <div className="chart-container">
+              <Pie 
+                data={pieChartData} 
                 options={{
                   ...chartOptions,
                   plugins: {
                     ...chartOptions.plugins,
-                    title: { display: true, text: 'Suggestion Status Distribution' },
-                    tooltip: {
-                      callbacks: {
-                        label: (context) => {
-                          const label = context.label || '';
-                          const value = context.raw || 0;
-                          const total = suggestionData.accepted + suggestionData.rejected + suggestionData.modified;
-                          const percentage = total ? ((value / total) * 100).toFixed(1) : 0;
-                          return `${label}: ${value} (${percentage}%)`;
-                        },
-                      },
+                    title: {
+                      display: true,
+                      text: 'Suggestion Distribution'
+                    }
+                  }
+                }} 
+              />
+            </div>
+            <div className="chart-stats">
+              <p>Acceptance: {suggestionData.percentages.accepted.toFixed(1)}%</p>
+              <p>Rejection: {suggestionData.percentages.rejected.toFixed(1)}%</p>
+              <p>Modification: {suggestionData.percentages.modified.toFixed(1)}%</p>
+            </div>
+          </div>
+
+          {/* Suggestion Trends */}
+          <div className="chart-card">
+            <h2>Suggestion Trends</h2>
+            <div className="chart-container">
+              <Line 
+                data={lineChartData} 
+                options={{
+                  ...chartOptions,
+                  plugins: {
+                    ...chartOptions.plugins,
+                    title: {
+                      display: true,
+                      text: 'Suggestions Over Time'
+                    }
+                  },
+                  scales: {
+                    x: {
+                      title: {
+                        display: true,
+                        text: 'Date'
+                      }
                     },
-                  },
-                }}
-              />
-              <div className="chart-stats">
-                <p>Acceptance Rate: {suggestionData.percentages.accepted.toFixed(1)}%</p>
-                <p>Rejection Rate: {suggestionData.percentages.rejected.toFixed(1)}%</p>
-                <p>Modification Rate: {suggestionData.percentages.modified.toFixed(1)}%</p>
-              </div>
-            </div>
-
-            <div className="chart-card">
-              <h2>Suggestions Over Time</h2>
-              <Line
-                data={lineChartData}
-                options={{
-                  ...chartOptions,
-                  plugins: {
-                    ...chartOptions.plugins,
-                    title: { display: true, text: 'Suggestion Trends' },
-                  },
-                  scales: {
-                    x: { title: { display: true, text: 'Date' } },
-                    y: { title: { display: true, text: 'Number of Suggestions' } },
-                  },
-                }}
+                    y: {
+                      title: {
+                        display: true,
+                        text: 'Number of Suggestions'
+                      },
+                      beginAtZero: true
+                    }
+                  }
+                }} 
               />
             </div>
           </div>
 
-          <div className="bottom-charts">
-            <div className="chart-card">
-              <h2>Performance Latency</h2>
-              <Line
-                data={latencyChartData}
+          {/* Latency Trends */}
+          <div className="chart-card">
+            <h2>Performance Latency</h2>
+            <div className="chart-container">
+              <Line 
+                data={latencyChartData} 
                 options={{
                   ...chartOptions,
                   plugins: {
                     ...chartOptions.plugins,
-                    title: { display: true, text: 'Average Latency Over Time' },
+                    title: {
+                      display: true,
+                      text: 'Average Latency Over Time'
+                    }
                   },
                   scales: {
-                    x: { title: { display: true, text: 'Date' } },
-                    y: { title: { display: true, text: 'Latency (ms)' } },
-                  },
-                }}
+                    x: {
+                      title: {
+                        display: true,
+                        text: 'Date'
+                      }
+                    },
+                    y: {
+                      title: {
+                        display: true,
+                        text: 'Latency (ms)'
+                      },
+                      beginAtZero: true
+                    }
+                  }
+                }} 
               />
             </div>
+          </div>
 
-            <div className="chart-card">
-              <h2>Learning Effectiveness</h2>
-              <Line
-                data={learningEffectivenessChartData}
+          {/* Learning Effectiveness */}
+          <div className="chart-card">
+            <h2>Learning Effectiveness</h2>
+            <div className="chart-container">
+              <Line 
+                data={learningEffectivenessChartData} 
                 options={{
                   ...chartOptions,
                   plugins: {
                     ...chartOptions.plugins,
-                    title: { display: true, text: 'Learning Effectiveness Over Time' },
+                    title: {
+                      display: true,
+                      text: 'Learning Progress Over Time'
+                    }
                   },
                   scales: {
-                    x: { title: { display: true, text: 'Date' } },
-                    y: { title: { display: true, text: 'Effectiveness (%)' } },
+                    x: {
+                      title: {
+                        display: true,
+                        text: 'Date'
+                      }
+                    },
+                    y: {
+                      title: {
+                        display: true,
+                        text: 'Effectiveness (%)'
+                      },
+                      beginAtZero: true,
+                      max: 100
+                    }
+                  }
+                }} 
+              />
+            </div>
+          </div>
+
+          {/* Error Types */}
+          <div className="chart-card">
+            <h2>Error Types</h2>
+            <div className="chart-container">
+              <Bar 
+                data={errorTypesChartData} 
+                options={{
+                  ...chartOptions,
+                  plugins: {
+                    ...chartOptions.plugins,
+                    title: {
+                      display: true,
+                      text: 'Errors by Severity'
+                    }
                   },
-                }}
+                  scales: {
+                    x: {
+                      title: {
+                        display: true,
+                        text: 'Severity'
+                      }
+                    },
+                    y: {
+                      title: {
+                        display: true,
+                        text: 'Count'
+                      },
+                      beginAtZero: true
+                    }
+                  }
+                }} 
               />
             </div>
           </div>
