@@ -93,6 +93,7 @@ const LoginPage = () => {
       const data = await response.json();
       alert('Signup successful! Please login.');
       setIsLogin(true);
+      setFormState({ username: '', password: '', role: 'developer' });
     } catch (error) {
       alert(`Error: ${error.message}`);
     }
@@ -113,6 +114,9 @@ const LoginPage = () => {
       <div className="star-container">
         {[...Array(20)].map((_, i) => (
           <div key={i} className="star"></div>
+        ))}
+        {[...Array(2)].map((_, i) => (
+          <div key={i} className="shooting-star"></div>
         ))}
       </div>
       <nav className="navbar">
@@ -188,7 +192,7 @@ const LoginPage = () => {
                 className="google-login-btn"
                 onClick={handleGoogleLogin}
               >
-                <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google logo" />
+                <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="Google logo" />
                 Sign in with Google
               </button>
             </div>

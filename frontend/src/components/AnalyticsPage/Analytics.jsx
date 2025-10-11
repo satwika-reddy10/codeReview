@@ -210,15 +210,17 @@ const Analytics = () => {
         {[...Array(20)].map((_, i) => (
           <div key={i} className="star"></div>
         ))}
+        <div className="shooting-star"></div>
+        <div className="shooting-star"></div>
       </div>
       <nav className="navbar">
         <div className="logo">CodeReview.</div>
         <ul className="nav-links">
           <li>
-            <Link to="/">LOGOUT</Link>
+            <Link to="/">Logout</Link>
           </li>
           <li>
-            <Link to="/submit">SUBMIT CODE</Link>
+            <Link to="/submit">Dashboard</Link>
           </li>
         </ul>
       </nav>

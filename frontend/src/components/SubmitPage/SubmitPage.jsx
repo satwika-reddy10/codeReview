@@ -106,11 +106,11 @@ const SubmitPage = () => {
     } catch (error) {
       console.error('Error fetching repository contents:', error);
       setRepoFiles([]);
-      setAiSuggestions([{ 
-        id: 1, 
-        text: `Error: ${error.message}. Please check the repository URL and try again.`, 
-        modifiedText: '', 
-        rejectReason: '', 
+      setAiSuggestions([{
+        id: 1,
+        text: `Error: ${error.message}. Please check the repository URL and try again.`,
+        modifiedText: '',
+        rejectReason: '',
         status: 'error',
         loadingAction: null,
         category: 'Other',
@@ -136,74 +136,89 @@ const SubmitPage = () => {
   );
 
   const handleSubmitCode = async () => {
-  if (suggestionsRef.current) {
-    suggestionsRef.current.scrollIntoView({ behavior: 'smooth' });
-  }
-
-  const newSessionId = generateNewSessionId();
-  setSessionId(newSessionId);
-  
-  setEditorLanguage(selectedLanguage);
-  
-  try {
-    setAiSuggestions([{ 
-      id: 1, 
-      text: 'Analyzing your code...', 
-      modifiedText: '', 
-      rejectReason: '', 
-      status: 'loading',
-      loadingAction: 'submit',
-      category: 'Other',
-      file_path: null
-    }]);
-    
-    const userId = parseInt(localStorage.getItem('user_id'));
-    
-    const response = await fetch("http://localhost:8000/generate-suggestions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        code: userCode, 
-        language: selectedLanguage,
-        session_id: newSessionId,
-        user_id: userId  // Add user_id to the request
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || `Server error: ${response.status}`);
+    if (suggestionsRef.current) {
+      suggestionsRef.current.scrollIntoView({ behavior: 'smooth' });
     }
 
-    const data = await response.json();
-    if (data.suggestions && data.suggestions.length > 0) {
-      setAiSuggestions(data.suggestions.map(s => ({ ...s, loadingAction: null })));
-    } else {
-      setAiSuggestions([{ 
-        id: 1, 
-        text: 'No specific suggestions found. Your code looks good!', 
-        modifiedText: '', 
-        rejectReason: '', 
-        status: null,
+    const newSessionId = generateNewSessionId();
+    setSessionId(newSessionId);
+
+    setEditorLanguage(selectedLanguage);
+
+    try {
+      setAiSuggestions([{
+        id: 1,
+        text: 'Analyzing your code...',
+        modifiedText: '',
+        rejectReason: '',
+        status: 'loading',
+        loadingAction: 'submit',
+        category: 'Other',
+        file_path: null
+      }]);
+
+      const userId = parseInt(localStorage.getItem('user_id'));
+
+      const response = await fetch("http://localhost:8000/generate-suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: userCode,
+          language: selectedLanguage,
+          session_id: newSessionId,
+          user_id: userId
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.suggestions && data.suggestions.length > 0) {
+        // Filter out introductory/summary text suggestions
+        const filteredSuggestions = data.suggestions.filter(s =>
+          !s.text.toLowerCase().includes('here are detailed suggestions') &&
+          !s.text.toLowerCase().includes('here are the suggestions') &&
+          s.text.trim().length > 0
+        );
+        setAiSuggestions(filteredSuggestions.length > 0 ? filteredSuggestions.map(s => ({ ...s, loadingAction: null })) : [{
+          id: 1,
+          text: 'No specific suggestions found. Your code looks good!',
+          modifiedText: '',
+          rejectReason: '',
+          status: null,
+          loadingAction: null,
+          category: 'Other',
+          file_path: null
+        }]);
+      } else {
+        setAiSuggestions([{
+          id: 1,
+          text: 'No specific suggestions found. Your code looks good!',
+          modifiedText: '',
+          rejectReason: '',
+          status: null,
+          loadingAction: null,
+          category: 'Other',
+          file_path: null
+        }]);
+      }
+    } catch (error) {
+      console.error("Error fetching suggestions:", error);
+      setAiSuggestions([{
+        id: 1,
+        text: `Error: ${error.message}. Please try again.`,
+        modifiedText: '',
+        rejectReason: '',
+        status: 'error',
         loadingAction: null,
         category: 'Other',
         file_path: null
       }]);
     }
-  } catch (error) {
-    console.error("Error fetching suggestions:", error);
-    setAiSuggestions([{ 
-      id: 1, 
-      text: `Error: ${error.message}. Please try again.`, 
-      modifiedText: '', 
-      rejectReason: '', 
-      status: 'error',
-      loadingAction: null,
-      category: 'Other',
-      file_path: null
-    }]);
-  }
-};
+  };
 
   const handleSubmitRepoFiles = async () => {
     if (suggestionsRef.current) {
@@ -214,11 +229,11 @@ const SubmitPage = () => {
     setSessionId(newSessionId);
 
     try {
-      setAiSuggestions([{ 
-        id: 1, 
-        text: 'Analyzing repository files...', 
-        modifiedText: '', 
-        rejectReason: '', 
+      setAiSuggestions([{
+        id: 1,
+        text: 'Analyzing repository files...',
+        modifiedText: '',
+        rejectReason: '',
         status: 'loading',
         loadingAction: 'submit',
         category: 'Other',
@@ -232,7 +247,7 @@ const SubmitPage = () => {
           repo_url: repoUrl,
           file_paths: selectedFiles,
           session_id: newSessionId,
-          user_id: userId  // Send user_id with the request
+          user_id: userId
         }),
       });
 
@@ -244,12 +259,18 @@ const SubmitPage = () => {
       const data = await response.json();
       if (data.reviews && data.reviews.length > 0) {
         const allSuggestions = data.reviews.flatMap((review) =>
-          review.suggestions.map((s) => ({
-            ...s,
-            file_path: review.file_path,
-            language: review.language,
-            loadingAction: null,
-          }))
+          review.suggestions
+            .filter(s =>
+              !s.text.toLowerCase().includes('here are detailed suggestions') &&
+              !s.text.toLowerCase().includes('here are the suggestions') &&
+              s.text.trim().length > 0
+            )
+            .map((s) => ({
+              ...s,
+              file_path: review.file_path,
+              language: review.language,
+              loadingAction: null,
+            }))
         );
         setAiSuggestions(allSuggestions.length > 0 ? allSuggestions : [{
           id: 1,
@@ -261,7 +282,6 @@ const SubmitPage = () => {
           category: 'Other',
           file_path: null,
         }]);
-        // Set the first file's content in the editor
         if (data.reviews.length > 0) {
           setUserCode(data.reviews[0].original_code || '');
           setEditorLanguage(data.reviews[0].language);
@@ -307,7 +327,7 @@ const SubmitPage = () => {
         const response = await fetch("http://localhost:8000/accept-suggestion", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             session_id: sessionId,
             suggestion_id: suggestionId,
             suggestion_text: suggestion.text,
@@ -315,7 +335,7 @@ const SubmitPage = () => {
             language: suggestion.language || selectedLanguage,
             original_code: userCode,
             file_path: filePath,
-            user_id: userId  // Send user_id with the request
+            user_id: userId
           }),
         });
 
@@ -354,14 +374,14 @@ const SubmitPage = () => {
         await fetch("http://localhost:8000/reject-suggestion", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             session_id: sessionId,
             suggestion_id: suggestionId,
             suggestion_text: suggestion.text,
             reject_reason: suggestion.rejectReason,
             language: suggestion.language || selectedLanguage,
             file_path: filePath,
-            user_id: userId  // Send user_id with the request
+            user_id: userId
           }),
         });
       } catch (error) {
@@ -405,7 +425,7 @@ const SubmitPage = () => {
             modified_text: modifiedText,
             language: suggestion.language || selectedLanguage,
             file_path: filePath,
-            user_id: userId  // Send user_id with the request
+            user_id: userId
           }),
         });
 
@@ -457,19 +477,19 @@ const SubmitPage = () => {
         {[...Array(20)].map((_, i) => (
           <div key={i} className="star" />
         ))}
+        <div className="shooting-star"></div>
+        <div className="shooting-star"></div>
       </div>
       <nav className="navbar">
-        <div className="logo">CodeMentor</div>
+        <div className="logo">CodeReview</div>
         <ul className="nav-links">
           <li><Link to="/">Home</Link></li>
-          <li><Link to="/submit">Submit Code</Link></li>
           <li><Link to="/analytics">Analytics</Link></li>
-          <li><Link to="/profile">Profile</Link></li>
         </ul>
       </nav>
       <section className="editor-section">
         <div className="git-integration">
-          <h3>Git Repository Integration</h3>
+          <h3>Import from GitHub Repository</h3>
           <div className="repo-input-container">
             <input
               type="text"
@@ -580,6 +600,9 @@ const SubmitPage = () => {
           </div>
           <div className={`editor-container right-editor ${animate ? 'slide-in-right' : ''}`}>
             <h3>Modified Code</h3>
+            <div className="editor-controls">
+              <div className="editor-controls-placeholder"></div>
+            </div>
             <div className="modified-editor-wrapper">
               <Suspense fallback={<div>Loading editor...</div>}>
                 <Editor
@@ -609,102 +632,129 @@ const SubmitPage = () => {
             {showAcceptMessage && (
               <div className="accept-message">Suggestion accepted!</div>
             )}
-            {Object.entries(groupedSuggestions).map(([filePath, suggestions]) => (
-              <div key={filePath} className="file-suggestions">
-                <h4>{filePath === 'null' ? 'Manual Input' : filePath}</h4>
-                {suggestions.length === 0 ? (
-                  <p>No suggestions available.</p>
-                ) : (
-                  suggestions.map((suggestion) => (
-                    <div key={`${suggestion.id}-${suggestion.file_path || 'null'}`} className="suggestion-item">
-                      <div className="suggestion-text-container">
-                        <textarea
-                          value={suggestion.modifiedText || suggestion.text}
-                          onChange={(e) =>
-                            suggestion.status ? null : handleModifySuggestion(suggestion.id, suggestion.file_path, e.target.value)
-                          }
-                          className="suggestion-text"
-                          disabled={!!suggestion.status}
-                        />
-                        {suggestion.loadingAction === 'submit' && (
-                          <span className="loader"></span>
-                        )}
-                      </div>
-                      {suggestion.status && (
-                        <div className={`suggestion-status ${suggestion.status.toLowerCase()}`}>
-                          {suggestion.status}
-                          {suggestion.status === 'Rejected' && suggestion.rejectReason && (
-                            <span className="reject-reason"> ({suggestion.rejectReason})</span>
+            {aiSuggestions.length === 1 && aiSuggestions[0].status === 'loading' ? (
+              <div className="suggestions-loading-container">
+                <div className="suggestions-big-loader"></div>
+                <div className="suggestions-loading-text">
+                  {aiSuggestions[0].text}
+                </div>
+              </div>
+            ) : (
+              Object.entries(groupedSuggestions).map(([filePath, suggestions]) => (
+                <div key={filePath} className="file-suggestions">
+                  {filePath !== 'null' && filePath !== 'Manual Input' && <h4>{filePath}</h4>}
+                  {suggestions.length === 0 ? (
+                    <p>No suggestions available.</p>
+                  ) : (
+                    suggestions.map((suggestion) => (
+                      <div key={`${suggestion.id}-${suggestion.file_path || 'null'}`} className="suggestion-item">
+                        <div className="suggestion-text-container">
+                          <textarea
+                            value={suggestion.modifiedText || suggestion.text}
+                            onChange={(e) =>
+                              suggestion.status ? null : handleModifySuggestion(suggestion.id, suggestion.file_path, e.target.value)
+                            }
+                            className="suggestion-text"
+                            disabled={!!suggestion.status}
+                          />
+                          {suggestion.loadingAction === 'submit' && (
+                            <span className="loader"></span>
                           )}
                         </div>
-                      )}
-                      {suggestion.category && (
-                        <span className={`suggestion-category ${suggestion.category.toLowerCase().replace(/\s+/g, '-')}`}>
-                          {suggestion.category}
-                        </span>
-                      )}
-                      <div className="suggestion-actions">
-                        <button
-                          onClick={() => handleAcceptSuggestion(suggestion.id, suggestion.file_path)}
-                          className="action-button accept"
-                          disabled={!!suggestion.status || suggestion.loadingAction || suggestion.status === 'loading' || suggestion.status === 'error'}
-                        >
-                          Accept
-                          {suggestion.loadingAction === 'accept' && <span className="loader"></span>}
-                        </button>
-                        <button
-                          onClick={() => handleRejectSuggestion(suggestion.id, suggestion.file_path)}
-                          className="action-button reject"
-                          disabled={!!suggestion.status || suggestion.loadingAction || suggestion.status === 'loading' || suggestion.status === 'error'}
-                        >
-                          Reject
-                          {suggestion.loadingAction === 'reject' && <span className="loader"></span>}
-                        </button>
-                        <button
-                          onClick={() =>
-                            handleModifySuggestion(
-                              suggestion.id,
-                              suggestion.file_path,
-                              suggestion.modifiedText || suggestion.text
-                            )
-                          }
-                          className="action-button modify"
-                          disabled={!!suggestion.status || suggestion.loadingAction || suggestion.status === 'loading' || suggestion.status === 'error'}
-                        >
-                          Modify
-                          {suggestion.loadingAction === 'modify' && <span className="loader"></span>}
-                        </button>
-                      </div>
-                      {activeRejectId === `${suggestion.id}-${suggestion.file_path || 'null'}` && !suggestion.status && (
-                        <div className="reject-reason-container">
-                          <select
-                            value={suggestion.rejectReason}
-                            onChange={(e) =>
-                              handleRejectReasonChange(suggestion.id, suggestion.file_path, e.target.value)
-                            }
-                            className="reject-reason-select"
-                          >
-                            <option value="">Select a reason</option>
-                            {rejectionReasons.map((reason) => (
-                              <option key={reason} value={reason}>
-                                {reason}
-                              </option>
-                            ))}
-                          </select>
+                        {suggestion.status && (
+                          <div className={`suggestion-status ${suggestion.status.toLowerCase()}`}>
+                            {suggestion.status}
+                            {suggestion.status === 'Rejected' && suggestion.rejectReason && (
+                              <span className="reject-reason"> ({suggestion.rejectReason})</span>
+                            )}
+                          </div>
+                        )}
+                        {suggestion.category && (
+                          <span className={`suggestion-category ${suggestion.category.toLowerCase().replace(/\s+/g, '-')}`}>
+                            {suggestion.category}
+                          </span>
+                        )}
+                        <div className="suggestion-actions">
                           <button
-                            onClick={() => handleConfirmReject(suggestion.id, suggestion.file_path)}
-                            className="confirm-reject-button"
-                            disabled={!suggestion.rejectReason}
+                            onClick={() => handleAcceptSuggestion(suggestion.id, suggestion.file_path)}
+                            className="action-button accept"
+                            disabled={!!suggestion.status || suggestion.loadingAction || suggestion.status === 'loading' || suggestion.status === 'error'}
                           >
-                            Confirm Reject
+                            {suggestion.loadingAction === 'accept' ? (
+                              <>
+                                Accepting...
+                                <span className="loader"></span>
+                              </>
+                            ) : (
+                              'Accept'
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleRejectSuggestion(suggestion.id, suggestion.file_path)}
+                            className="action-button reject"
+                            disabled={!!suggestion.status || suggestion.loadingAction || suggestion.status === 'loading' || suggestion.status === 'error'}
+                          >
+                            {suggestion.loadingAction === 'reject' ? (
+                              <>
+                                Rejecting...
+                                <span className="loader"></span>
+                              </>
+                            ) : (
+                              'Reject'
+                            )}
+                          </button>
+                          <button
+                            onClick={() =>
+                              handleModifySuggestion(
+                                suggestion.id,
+                                suggestion.file_path,
+                                suggestion.modifiedText || suggestion.text
+                              )
+                            }
+                            className="action-button modify"
+                            disabled={!!suggestion.status || suggestion.loadingAction || suggestion.status === 'loading' || suggestion.status === 'error'}
+                          >
+                            {suggestion.loadingAction === 'modify' ? (
+                              <>
+                                Modifying...
+                                <span className="loader"></span>
+                              </>
+                            ) : (
+                              'Modify'
+                            )}
                           </button>
                         </div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            ))}
+                        {activeRejectId === `${suggestion.id}-${suggestion.file_path || 'null'}` && !suggestion.status && (
+                          <div className="reject-reason-container">
+                            <select
+                              value={suggestion.rejectReason}
+                              onChange={(e) =>
+                                handleRejectReasonChange(suggestion.id, suggestion.file_path, e.target.value)
+                              }
+                              className="reject-reason-select"
+                            >
+                              <option value="">Select a reason</option>
+                              {rejectionReasons.map((reason) => (
+                                <option key={reason} value={reason}>
+                                  {reason}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => handleConfirmReject(suggestion.id, suggestion.file_path)}
+                              className="confirm-reject-button"
+                              disabled={!suggestion.rejectReason}
+                            >
+                              Confirm Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
       </section>

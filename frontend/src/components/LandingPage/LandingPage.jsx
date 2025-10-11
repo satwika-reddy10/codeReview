@@ -28,6 +28,9 @@ const LandingPage = () => {
         <div className="star"></div>
         <div className="star"></div>
         <div className="star"></div>
+
+        <div className="shooting-star"></div>
+        <div className="shooting-star"></div>
       </div>
       <nav className="navbar">
         <div className="logo">CodeReview.</div>
@@ -45,7 +48,7 @@ const LandingPage = () => {
         <div className="hero-content">
           <h1>Welcome to <span>CodeReview</span></h1>
           <p>
-            Simplify your code reviews with AI-powered insights.  
+            Simplify your code reviews with AI-powered insights.
             Clean, secure, and efficient code at your fingertips.
           </p>
           <button className="cta-btn" onClick={() => navigate('/login')}>Get Started</button>
@@ -90,7 +93,7 @@ const LandingPage = () => {
         </div>
       </section>
 
-    <footer className="footer-section" id="contact">
+      <footer className="footer-section" id="contact">
         <div className="footer-content">
           <div className="footer-logo">CodeReview.</div>
           <div className="contact-details">

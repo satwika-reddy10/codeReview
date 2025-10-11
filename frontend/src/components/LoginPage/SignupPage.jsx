@@ -53,8 +53,8 @@ const SignupPage = ({ onToggleForm }) => {
       <p style={{ fontSize: '14px', color: '#b0b0b0', marginBottom: '20px' }}>
         Already Registered? <span onClick={onToggleForm} style={{ cursor: 'pointer', color: '#4285F4', textDecoration: 'none' }}>Log in here.</span>
       </p>
-      <form onSubmit={handleSubmit}>
-        <div className="input-group">
+      <form onSubmit={handleSubmit} style={{ maxWidth: '300px', margin: '20px auto', padding: '20px', background: '#1a1a2e', borderRadius: '10px', boxShadow: '0 0 10px rgba(0,0,0,0.5)' }}>
+        <div className="input-group" style={{ marginBottom: '15px' }}>
           <label htmlFor="username">EMAIL</label>
           <input
             id="username"
@@ -63,9 +63,10 @@ const SignupPage = ({ onToggleForm }) => {
             placeholder="example@gmail.com"
             value={formState.username}
             onChange={handleChange}
+            style={{ width: '100%', padding: '8px', marginTop: '5px' }}
           />
         </div>
-        <div className="input-group">
+        <div className="input-group" style={{ marginBottom: '15px' }}>
           <label htmlFor="password">PASSWORD</label>
           <input
             id="password"
@@ -74,9 +75,10 @@ const SignupPage = ({ onToggleForm }) => {
             placeholder="At least 8 characters"
             value={formState.password}
             onChange={handleChange}
+            style={{ width: '100%', padding: '8px', marginTop: '5px' }}
           />
         </div>
-        <div className="input-group">
+        <div className="input-group" style={{ marginBottom: '15px' }}>
           <label htmlFor="dob">DATE OF BIRTH</label>
           <input
             id="dob"
@@ -84,9 +86,10 @@ const SignupPage = ({ onToggleForm }) => {
             name="dob"
             value={formState.dob}
             onChange={handleChange}
+            style={{ width: '100%', padding: '8px', marginTop: '5px' }}
           />
         </div>
-        <button type="submit" className="login-btn" style={{ marginTop: '20px', backgroundColor: '#f6f6f7', color: '#111' }}>Sign up</button>
+        <button type="submit" className="login-btn" style={{ marginTop: '10px', backgroundColor: '#f6f6f7', color: '#111', width: '100%', padding: '10px', border: 'none', borderRadius: '5px' }}>Sign up</button>
       </form>
     </>
   );
