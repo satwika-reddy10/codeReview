@@ -235,7 +235,7 @@
 .star:nth-child(19) { top: 15%; left: 75%; animation-delay: 3.6s; }
 .star:nth-child(20) { top: 25%; left: 85%; animation-delay: 3.8s; }
 
-/* Shooting stars - Only 2 with long delays */
+/* Shooting stars */
 .shooting-star {
   position: absolute;
   width: 2px;

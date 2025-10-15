@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Pie, Line, Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, LineElement, PointElement, LinearScale, CategoryScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
-import './Analytics.css';
+import './AdminDashboard.css';
 
 ChartJS.register(ArcElement, LineElement, PointElement, LinearScale, CategoryScale, BarElement, Title, Tooltip, Legend);
 
@@ -76,26 +76,30 @@ const AdminDashboard = () => {
 
   const fetchOverallAnalytics = async () => {
     try {
-      const filters = { user_id: null }; // Get overall data
-      
-      const suggestionRes = await axios.post('http://localhost:8000/analytics/suggestions', filters);
+      const filters = { user_id: null };
+
+      const [
+        suggestionRes,
+        trendRes,
+        accuracyRes,
+        latencyRes,
+        effectivenessRes,
+        errorTypesRes
+      ] = await Promise.all([
+        axios.post('http://localhost:8000/analytics/suggestions', filters),
+        axios.post('http://localhost:8000/analytics/trends', filters),
+        axios.post('http://localhost:8000/analytics/detection-accuracy', filters),
+        axios.post('http://localhost:8000/analytics/latency', filters),
+        axios.post('http://localhost:8000/analytics/learning-effectiveness', filters),
+        axios.post('http://localhost:8000/analytics/error-types', filters)
+      ]);
+
       setSuggestionData(suggestionRes.data);
-
-      const trendRes = await axios.post('http://localhost:8000/analytics/trends', filters);
       setTrendData(trendRes.data);
-
-      const accuracyRes = await axios.post('http://localhost:8000/analytics/detection-accuracy', filters);
       setDetectionAccuracy(accuracyRes.data);
-
-      const latencyRes = await axios.post('http://localhost:8000/analytics/latency', filters);
       setLatencyData(latencyRes.data);
-
-      const effectivenessRes = await axios.post('http://localhost:8000/analytics/learning-effectiveness', filters);
       setLearningEffectivenessData(effectivenessRes.data);
-
-      const errorTypesRes = await axios.post('http://localhost:8000/analytics/error-types', filters);
       setErrorTypesData(errorTypesRes.data);
-
       setError(null);
       setIsLoading(false);
     } catch (err) {
@@ -108,13 +112,22 @@ const AdminDashboard = () => {
   const fetchDeveloperAnalytics = async (developerId) => {
     try {
       const filters = { user_id: developerId };
-      
-      const suggestionRes = await axios.post('http://localhost:8000/analytics/suggestions', filters);
-      const trendRes = await axios.post('http://localhost:8000/analytics/trends', filters);
-      const accuracyRes = await axios.post('http://localhost:8000/analytics/detection-accuracy', filters);
-      const latencyRes = await axios.post('http://localhost:8000/analytics/latency', filters);
-      const effectivenessRes = await axios.post('http://localhost:8000/analytics/learning-effectiveness', filters);
-      const errorTypesRes = await axios.post('http://localhost:8000/analytics/error-types', filters);
+
+      const [
+        suggestionRes,
+        trendRes,
+        accuracyRes,
+        latencyRes,
+        effectivenessRes,
+        errorTypesRes
+      ] = await Promise.all([
+        axios.post('http://localhost:8000/analytics/suggestions', filters),
+        axios.post('http://localhost:8000/analytics/trends', filters),
+        axios.post('http://localhost:8000/analytics/detection-accuracy', filters),
+        axios.post('http://localhost:8000/analytics/latency', filters),
+        axios.post('http://localhost:8000/analytics/learning-effectiveness', filters),
+        axios.post('http://localhost:8000/analytics/error-types', filters)
+      ]);
 
       return {
         suggestionData: suggestionRes.data,
@@ -134,7 +147,7 @@ const AdminDashboard = () => {
     setSelectedDeveloper(developer);
     setViewMode('developer');
     setIsLoading(true);
-    
+
     try {
       const analytics = await fetchDeveloperAnalytics(developer.id);
       setSuggestionData(analytics.suggestionData);
@@ -161,13 +174,45 @@ const AdminDashboard = () => {
     setSelectedDeveloper(null);
   };
 
+  // Helper function to get the correct data structure for charts
+  const getLatencyData = () => {
+    if (viewMode === 'developer') {
+      // For single developer, use overall_latency array directly
+      return latencyData.overall_latency || [];
+    } else {
+      // For overall view, use overall_latency array
+      return latencyData.overall_latency || [];
+    }
+  };
+
+  const getLearningEffectivenessData = () => {
+    if (viewMode === 'developer') {
+      // For single developer, use effectiveness array directly
+      return learningEffectivenessData.effectiveness || [];
+    } else {
+      // For overall view, use effectiveness array
+      return learningEffectivenessData.effectiveness || [];
+    }
+  };
+
+  const getErrorTypesData = () => {
+    if (viewMode === 'developer') {
+      // For single developer, use overall_error_types array directly
+      return errorTypesData.overall_error_types || [];
+    } else {
+      // For overall view, use overall_error_types array
+      return errorTypesData.overall_error_types || [];
+    }
+  };
+
   const pieChartData = {
     labels: ['Accepted', 'Rejected', 'Modified'],
     datasets: [
       {
         data: [suggestionData.accepted, suggestionData.rejected, suggestionData.modified],
-        backgroundColor: ['#36A2EB', '#FF6384', '#FFCE56'],
-        hoverBackgroundColor: ['#36A2EB', '#FF6384', '#FFCE56'],
+        backgroundColor: ['#4CAF50', '#F44336', '#FF9800'],
+        borderColor: '#ffffff',
+        borderWidth: 2,
       },
     ],
   };
@@ -178,17 +223,47 @@ const AdminDashboard = () => {
       {
         label: 'Accepted',
         data: suggestionData.developer_stats.map(d => d.accepted),
-        backgroundColor: '#36A2EB',
+        backgroundColor: '#4CAF50',
       },
       {
         label: 'Rejected',
         data: suggestionData.developer_stats.map(d => d.rejected),
-        backgroundColor: '#FF6384',
+        backgroundColor: '#F44336',
       },
       {
         label: 'Modified',
         data: suggestionData.developer_stats.map(d => d.modified),
-        backgroundColor: '#FFCE56',
+        backgroundColor: '#FF9800',
+      },
+    ],
+  };
+
+  const lineChartData = {
+    labels: trendData.accepted?.map((item) => item.date) || [],
+    datasets: [
+      {
+        label: 'Accepted',
+        data: trendData.accepted?.map((item) => item.count) || [],
+        borderColor: '#4CAF50',
+        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+        fill: true,
+        tension: 0.4,
+      },
+      {
+        label: 'Rejected',
+        data: trendData.rejected?.map((item) => item.count) || [],
+        borderColor: '#F44336',
+        backgroundColor: 'rgba(244, 67, 54, 0.1)',
+        fill: true,
+        tension: 0.4,
+      },
+      {
+        label: 'Modified',
+        data: trendData.modified?.map((item) => item.count) || [],
+        borderColor: '#FF9800',
+        backgroundColor: 'rgba(255, 152, 0, 0.1)',
+        fill: true,
+        tension: 0.4,
       },
     ],
   };
@@ -206,11 +281,58 @@ const AdminDashboard = () => {
     ],
   };
 
+  const latencyChartData = {
+    labels: getLatencyData().map((item) => item.date) || [],
+    datasets: [
+      {
+        label: 'Average Latency (ms)',
+        data: getLatencyData().map((item) => item.latency) || [],
+        borderColor: '#2196F3',
+        backgroundColor: 'rgba(33, 150, 243, 0.1)',
+        fill: true,
+        tension: 0.4,
+      },
+    ],
+  };
+
+  const learningEffectivenessChartData = {
+    labels: getLearningEffectivenessData().map((item) => item.date) || [],
+    datasets: [
+      {
+        label: 'Learning Effectiveness (%)',
+        data: getLearningEffectivenessData().map((item) => item.effectiveness) || [],
+        borderColor: '#9C27B0',
+        backgroundColor: 'rgba(156, 39, 176, 0.1)',
+        fill: true,
+        tension: 0.4,
+      },
+    ],
+  };
+
+  const errorTypesChartData = {
+    labels: getErrorTypesData().map((item) => item.severity) || [],
+    datasets: [
+      {
+        label: 'Error Count',
+        data: getErrorTypesData().map((item) => item.count) || [],
+        backgroundColor: [
+          '#FF6384', // High
+          '#36A2EB', // Medium
+          '#FFCE56', // Low
+          '#4BC0C0', // Unknown
+        ],
+        borderColor: '#ffffff',
+        borderWidth: 2,
+      },
+    ],
+  };
+
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: { position: 'top' },
+      title: { display: true, font: { size: 16 } },
     },
   };
 
@@ -222,34 +344,52 @@ const AdminDashboard = () => {
   };
 
   if (isLoading) {
-    return <div className="analytics-page"><div>Loading...</div></div>;
+    return (
+      <div className="admin-dashboard">
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
   }
 
   if (userRole !== 'admin') {
-    return <div className="analytics-page"><div>Access restricted to admins.</div></div>;
+    return (
+      <div className="admin-dashboard">
+        <div>Access restricted to admins.</div>
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="analytics-page"><p className="error-message">{error}</p></div>;
+    return (
+      <div className="admin-dashboard">
+        <p className="error">{error}</p>
+      </div>
+    );
   }
 
   return (
-    <div className="analytics-page">
+    <div className="admin-dashboard">
       <div className="star-container">
         {[...Array(20)].map((_, i) => (
           <div key={i} className="star"></div>
+        ))}
+        {[...Array(2)].map((_, i) => (
+          <div key={i} className="shooting-star"></div>
         ))}
       </div>
       <nav className="navbar">
         <div className="logo">CodeReview.</div>
         <ul className="nav-links">
-          <li><Link to="/" onClick={handleLogout}>LOGOUT</Link></li>
+          <li><Link to="/" onClick={handleLogout}>Logout</Link></li>
         </ul>
       </nav>
-      
-      <div className="analytics-container">
+
+      <div className="dashboard-container">
         <h1>Admin Dashboard</h1>
-        
+
         {viewMode === 'overview' && (
           <div className="admin-overview">
             <div className="admin-actions">
@@ -257,24 +397,36 @@ const AdminDashboard = () => {
                 View Overall Analytics
               </button>
             </div>
-            
+
             <div className="developers-list">
               <h2>Developers</h2>
-              <div className="developers-grid">
-                {developers.map(dev => (
-                  <div key={dev.id} className="developer-card">
-                    <h3>{dev.username}</h3>
-                    <p>User ID: {dev.id}</p>
-                    <p>Joined: {new Date(dev.created_at).toLocaleDateString()}</p>
-                    <button 
-                      className="view-analytics-btn"
-                      onClick={() => handleViewDeveloper(dev)}
-                    >
-                      View Analytics
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <table className="developers-table">
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>User ID</th>
+                    <th>Joined Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {developers.map(dev => (
+                    <tr key={dev.id}>
+                      <td>{dev.username}</td>
+                      <td>{dev.id}</td>
+                      <td>{new Date(dev.created_at).toLocaleDateString()}</td>
+                      <td>
+                        <button
+                          className="view-analytics-btn"
+                          onClick={() => handleViewDeveloper(dev)}
+                        >
+                          View Analytics
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
@@ -286,14 +438,38 @@ const AdminDashboard = () => {
                 ← Back to Overview
               </button>
               <h2>
-                {viewMode === 'overall' ? 'Overall Analytics' : `Analytics for ${selectedDeveloper.username}`}
+                {viewMode === 'overall' ? 'Overall Analytics' : `Analytics for ${selectedDeveloper?.username}`}
               </h2>
             </div>
 
-            <div className="top-charts">
+            <div className="metrics-summary">
+              <div className="metric-card">
+                <h3>Detection Accuracy</h3>
+                <div className="metric-value">{detectionAccuracy.accuracy.toFixed(1)}%</div>
+                <p>Relevant Suggestions</p>
+              </div>
+              <div className="metric-card">
+                <h3>Accepted</h3>
+                <div className="metric-value">{suggestionData.accepted}</div>
+                <p>Suggestions</p>
+              </div>
+              <div className="metric-card">
+                <h3>Rejected</h3>
+                <div className="metric-value">{suggestionData.rejected}</div>
+                <p>Suggestions</p>
+              </div>
+              <div className="metric-card">
+                <h3>Modified</h3>
+                <div className="metric-value">{suggestionData.modified}</div>
+                <p>Suggestions</p>
+              </div>
+            </div>
+
+            <div className="charts-grid">
+              {/* Suggestion Breakdown */}
               <div className="chart-card">
                 <h2>Suggestion Breakdown</h2>
-                <div style={{ height: '300px' }}>
+                <div className="chart-container">
                   <Pie
                     data={pieChartData}
                     options={{
@@ -323,10 +499,11 @@ const AdminDashboard = () => {
                 </div>
               </div>
 
+              {/* Developer Suggestions Comparison - Only show in overall view */}
               {viewMode === 'overall' && (
                 <div className="chart-card">
                   <h2>Developer Suggestions Comparison</h2>
-                  <div style={{ height: '300px' }}>
+                  <div className="chart-container">
                     <Bar
                       data={developerSuggestionChartData}
                       options={{
@@ -344,13 +521,33 @@ const AdminDashboard = () => {
                   </div>
                 </div>
               )}
-            </div>
 
-            {viewMode === 'overall' && (
-              <div className="bottom-charts">
+              {/* Suggestion Trends */}
+              <div className="chart-card">
+                <h2>Suggestion Trends</h2>
+                <div className="chart-container">
+                  <Line
+                    data={lineChartData}
+                    options={{
+                      ...chartOptions,
+                      plugins: {
+                        ...chartOptions.plugins,
+                        title: { display: true, text: 'Suggestions Over Time' },
+                      },
+                      scales: {
+                        x: { title: { display: true, text: 'Date' } },
+                        y: { title: { display: true, text: 'Number of Suggestions' }, beginAtZero: true },
+                      },
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Developer Detection Accuracy - Only show in overall view */}
+              {viewMode === 'overall' && (
                 <div className="chart-card">
                   <h2>Developer Detection Accuracy</h2>
-                  <div style={{ height: '300px' }}>
+                  <div className="chart-container">
                     <Line
                       data={developerAccuracyChartData}
                       options={{
@@ -367,8 +564,71 @@ const AdminDashboard = () => {
                     />
                   </div>
                 </div>
+              )}
+
+              {/* Performance Latency - Show for both views */}
+              <div className="chart-card">
+                <h2>Performance Latency</h2>
+                <div className="chart-container">
+                  <Line
+                    data={latencyChartData}
+                    options={{
+                      ...chartOptions,
+                      plugins: {
+                        ...chartOptions.plugins,
+                        title: { display: true, text: 'Average Latency Over Time' },
+                      },
+                      scales: {
+                        x: { title: { display: true, text: 'Date' } },
+                        y: { title: { display: true, text: 'Latency (ms)' }, beginAtZero: true },
+                      },
+                    }}
+                  />
+                </div>
               </div>
-            )}
+
+              {/* Learning Effectiveness - Show for both views */}
+              <div className="chart-card">
+                <h2>Learning Effectiveness</h2>
+                <div className="chart-container">
+                  <Line
+                    data={learningEffectivenessChartData}
+                    options={{
+                      ...chartOptions,
+                      plugins: {
+                        ...chartOptions.plugins,
+                        title: { display: true, text: 'Learning Progress Over Time' },
+                      },
+                      scales: {
+                        x: { title: { display: true, text: 'Date' } },
+                        y: { title: { display: true, text: 'Effectiveness (%)' }, beginAtZero: true, max: 100 },
+                      },
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Error Types - Show for both views */}
+              <div className="chart-card">
+                <h2>Error Types</h2>
+                <div className="chart-container">
+                  <Bar
+                    data={errorTypesChartData}
+                    options={{
+                      ...chartOptions,
+                      plugins: {
+                        ...chartOptions.plugins,
+                        title: { display: true, text: 'Errors by Severity' },
+                      },
+                      scales: {
+                        x: { title: { display: true, text: 'Severity' } },
+                        y: { title: { display: true, text: 'Count' }, beginAtZero: true },
+                      },
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
