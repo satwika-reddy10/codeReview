@@ -430,6 +430,56 @@ def get_error_types(filter: AnalyticsFilter, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Error in get_error_types: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+def get_error_categories(filter: AnalyticsFilter, db: Session = Depends(get_db)):
+    try:
+        # Overall error categories from AISuggestion table
+        query = build_query(AISuggestion, filter, db)
+        query = query.with_entities(
+            AISuggestion.error_category,
+            func.count().label('count')
+        ).group_by(AISuggestion.error_category)
+        
+        results = query.all()
+        overall_error_categories = [{
+            'category': item.error_category or 'Other Issue', 
+            'count': item.count
+        } for item in results]
+
+        # Per-developer error categories if no user_id filter (admin view)
+        developer_error_categories = []
+        if filter.user_id is None:
+            developers = db.query(User).filter(User.role == 'developer').all()
+            for dev in developers:
+                dev_filter = AnalyticsFilter(
+                    user_id=dev.id, 
+                    language=filter.language, 
+                    start_date=filter.start_date, 
+                    end_date=filter.end_date
+                )
+                dev_query = build_query(AISuggestion, dev_filter, db)
+                dev_query = dev_query.with_entities(
+                    AISuggestion.error_category,
+                    func.count().label('count')
+                ).group_by(AISuggestion.error_category)
+                
+                dev_results = dev_query.all()
+                developer_error_categories.append({
+                    'user_id': dev.id,
+                    'username': dev.username,
+                    'error_categories': [{
+                        'category': item.error_category or 'Other Issue', 
+                        'count': item.count
+                    } for item in dev_results]
+                })
+
+        return {
+            'overall_error_categories': overall_error_categories,
+            'developer_error_categories': developer_error_categories
+        }
+    except Exception as e:
+        print(f"Error in get_error_categories: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
 def debug_analytics_data(db: Session = Depends(get_db)):
     """Debug endpoint to check what data exists in the database"""

@@ -10,6 +10,75 @@ from utils import summarize_user_patterns
 from datetime import datetime
 import time
 
+def categorize_error(suggestion_text: str, language: str) -> str:
+    """
+    Categorize the error type based on suggestion text and language
+    """
+    text = suggestion_text.lower()
+    
+    # Syntax errors
+    if any(keyword in text for keyword in ['syntax', 'parse', 'invalid syntax', 'unexpected token', 
+                                          'missing parenthesis', 'unclosed', 'unexpected indent',
+                                          'indentation error', 'syntax error']):
+        return 'Syntax Error'
+    
+    # Runtime errors
+    elif any(keyword in text for keyword in ['runtime', 'exception', 'error', 'crash', 'undefined',
+                                           'null reference', 'type error', 'reference error',
+                                           'range error', 'not defined', 'is not defined']):
+        return 'Runtime Error'
+    
+    # Logical errors
+    elif any(keyword in text for keyword in ['logic', 'incorrect', 'wrong result', 'unexpected behavior',
+                                           'infinite loop', 'off by one', 'wrong calculation',
+                                           'incorrect condition', 'wrong variable']):
+        return 'Logical Error'
+    
+    # Performance issues
+    elif any(keyword in text for keyword in ['performance', 'slow', 'optimize', 'efficiency', 'memory',
+                                           'time complexity', 'space complexity', 'bottleneck',
+                                           'inefficient', 'leak', 'garbage collection']):
+        return 'Performance Issue'
+    
+    # Security issues
+    elif any(keyword in text for keyword in ['security', 'vulnerability', 'injection', 'xss', 'sql injection',
+                                           'cross-site', 'authentication', 'authorization', 'encryption',
+                                           'secure', 'unsafe', 'dangerous']):
+        return 'Security Issue'
+    
+    # Code style issues
+    elif any(keyword in text for keyword in ['style', 'formatting', 'indentation', 'naming convention',
+                                           'code style', 'readability', 'consistent', 'convention',
+                                           'pep8', 'lint', 'format']):
+        return 'Code Style'
+    
+    # Best practices
+    elif any(keyword in text for keyword in ['best practice', 'clean code', 'maintainability', 'readability',
+                                           'refactor', 'duplicate code', 'dry', 'single responsibility',
+                                           'separation of concerns', 'modular']):
+        return 'Best Practice'
+    
+    # Language-specific errors
+    elif language == 'python':
+        if any(keyword in text for keyword in ['import error', 'module not found', 'name error',
+                                             'attribute error', 'key error', 'value error',
+                                             'index error', 'indentation error']):
+            return 'Python Specific Error'
+    
+    elif language == 'javascript':
+        if any(keyword in text for keyword in ['typeerror', 'referenceerror', 'syntaxerror',
+                                             'rangeerror', 'evalerror', 'urierror']):
+            return 'JavaScript Specific Error'
+    
+    elif language == 'java':
+        if any(keyword in text for keyword in ['nullpointerexception', 'arrayindexoutofboundsexception',
+                                             'classcastexception', 'illegalargumentexception',
+                                             'stackoverflowerror', 'outofmemoryerror']):
+            return 'Java Specific Error'
+    
+    # Default category
+    return 'Other Issue'
+
 async def process_code_for_review(code: str, language: str, session_id: str, file_path: str | None, db: Session, user_id: int = None):
     try:
         # Store code session with user_id
@@ -97,10 +166,15 @@ async def process_code_for_review(code: str, language: str, session_id: str, fil
 
                 severity_match = re.search(r'\*\*Severity:\*\*\s*(High|Medium|Low)', block)
                 severity = severity_match.group(1) if severity_match else "Medium"
+                
+                # Categorize the error
+                error_category = categorize_error(block.strip(), language)
+                
                 suggestion_data = {
                     "id": i + 1,
                     "text": block.strip(),
                     "severity": severity,
+                    "error_category": error_category,
                     "modifiedText": "",
                     "rejectReason": "",
                     "status": None,
@@ -111,6 +185,7 @@ async def process_code_for_review(code: str, language: str, session_id: str, fil
                     suggestion_id=i + 1,
                     suggestion_text=block.strip(),
                     severity=severity,
+                    error_category=error_category,
                     language=language,
                     file_path=file_path
                 )
@@ -145,6 +220,7 @@ async def generate_suggestions(payload: CodeInput, db: Session = Depends(get_db)
                 "id": 1,
                 "text": "No specific suggestions found. Your code looks good!",
                 "severity": "Low",
+                "error_category": "Other Issue",
                 "modifiedText": "",
                 "rejectReason": "",
                 "status": None,
@@ -159,12 +235,21 @@ async def generate_suggestions(payload: CodeInput, db: Session = Depends(get_db)
 
 async def accept_suggestion(payload: AcceptSuggestion, db: Session = Depends(get_db)):
     try:
+        # Get the original suggestion to preserve error category
+        original_suggestion = db.query(AISuggestion).filter(
+            AISuggestion.session_id == payload.session_id,
+            AISuggestion.suggestion_id == payload.suggestion_id
+        ).first()
+        
+        error_category = original_suggestion.error_category if original_suggestion else "Other Issue"
+        
         # Store accepted suggestion
         accepted_suggestion = AcceptedSuggestion(
             session_id=payload.session_id,
             suggestion_id=payload.suggestion_id,
             suggestion_text=payload.suggestion_text,
             modified_text=payload.modified_text,
+            error_category=error_category,
             language=payload.language,
             file_path=payload.file_path
         )
@@ -174,6 +259,7 @@ async def accept_suggestion(payload: AcceptSuggestion, db: Session = Depends(get
         pattern_data = {
             "suggestion_text": payload.suggestion_text,
             "modified_text": payload.modified_text,
+            "error_category": error_category,
             "language": payload.language,
             "file_path": payload.file_path
         }
@@ -233,12 +319,21 @@ async def accept_suggestion(payload: AcceptSuggestion, db: Session = Depends(get
 
 async def reject_suggestion(payload: RejectSuggestion, db: Session = Depends(get_db)):
     try:
+        # Get the original suggestion to preserve error category
+        original_suggestion = db.query(AISuggestion).filter(
+            AISuggestion.session_id == payload.session_id,
+            AISuggestion.suggestion_id == payload.suggestion_id
+        ).first()
+        
+        error_category = original_suggestion.error_category if original_suggestion else "Other Issue"
+        
         # Store rejected suggestion
         rejected_suggestion = RejectedSuggestion(
             session_id=payload.session_id,
             suggestion_id=payload.suggestion_id,
             suggestion_text=payload.suggestion_text,
             reject_reason=payload.reject_reason,
+            error_category=error_category,
             language=payload.language,
             file_path=payload.file_path
         )
@@ -248,6 +343,7 @@ async def reject_suggestion(payload: RejectSuggestion, db: Session = Depends(get
         pattern_data = {
             "suggestion_text": payload.suggestion_text,
             "reject_reason": payload.reject_reason,
+            "error_category": error_category,
             "language": payload.language,
             "file_path": payload.file_path
         }
@@ -266,12 +362,21 @@ async def reject_suggestion(payload: RejectSuggestion, db: Session = Depends(get
 
 async def modify_suggestion(payload: ModifySuggestion, db: Session = Depends(get_db)):
     try:
+        # Get the original suggestion to preserve error category
+        original_suggestion = db.query(AISuggestion).filter(
+            AISuggestion.session_id == payload.session_id,
+            AISuggestion.suggestion_id == payload.suggestion_id
+        ).first()
+        
+        error_category = original_suggestion.error_category if original_suggestion else "Other Issue"
+        
         # Store modified suggestion
         modified_suggestion = ModifiedSuggestion(
             session_id=payload.session_id,
             suggestion_id=payload.suggestion_id,
             original_text=payload.original_text,
             modified_text=payload.modified_text,
+            error_category=error_category,
             language=payload.language,
             file_path=payload.file_path
         )
@@ -281,6 +386,7 @@ async def modify_suggestion(payload: ModifySuggestion, db: Session = Depends(get
         pattern_data = {
             "original_text": payload.original_text,
             "modified_text": payload.modified_text,
+            "error_category": error_category,
             "language": payload.language,
             "file_path": payload.file_path
         }

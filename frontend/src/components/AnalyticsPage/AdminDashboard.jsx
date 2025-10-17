@@ -41,6 +41,10 @@ const AdminDashboard = () => {
     overall_error_types: [],
     developer_error_types: [],
   });
+  const [errorCategoriesData, setErrorCategoriesData] = useState({
+    overall_error_categories: [],
+    developer_error_categories: [],
+  });
   const [filters, setFilters] = useState({
     user_id: null,
     language: null,
@@ -84,14 +88,16 @@ const AdminDashboard = () => {
         accuracyRes,
         latencyRes,
         effectivenessRes,
-        errorTypesRes
+        errorTypesRes,
+        errorCategoriesRes
       ] = await Promise.all([
         axios.post('http://localhost:8000/analytics/suggestions', filters),
         axios.post('http://localhost:8000/analytics/trends', filters),
         axios.post('http://localhost:8000/analytics/detection-accuracy', filters),
         axios.post('http://localhost:8000/analytics/latency', filters),
         axios.post('http://localhost:8000/analytics/learning-effectiveness', filters),
-        axios.post('http://localhost:8000/analytics/error-types', filters)
+        axios.post('http://localhost:8000/analytics/error-types', filters),
+        axios.post('http://localhost:8000/analytics/error-categories', filters)
       ]);
 
       setSuggestionData(suggestionRes.data);
@@ -100,6 +106,7 @@ const AdminDashboard = () => {
       setLatencyData(latencyRes.data);
       setLearningEffectivenessData(effectivenessRes.data);
       setErrorTypesData(errorTypesRes.data);
+      setErrorCategoriesData(errorCategoriesRes.data);
       setError(null);
       setIsLoading(false);
     } catch (err) {
@@ -119,14 +126,16 @@ const AdminDashboard = () => {
         accuracyRes,
         latencyRes,
         effectivenessRes,
-        errorTypesRes
+        errorTypesRes,
+        errorCategoriesRes
       ] = await Promise.all([
         axios.post('http://localhost:8000/analytics/suggestions', filters),
         axios.post('http://localhost:8000/analytics/trends', filters),
         axios.post('http://localhost:8000/analytics/detection-accuracy', filters),
         axios.post('http://localhost:8000/analytics/latency', filters),
         axios.post('http://localhost:8000/analytics/learning-effectiveness', filters),
-        axios.post('http://localhost:8000/analytics/error-types', filters)
+        axios.post('http://localhost:8000/analytics/error-types', filters),
+        axios.post('http://localhost:8000/analytics/error-categories', filters)
       ]);
 
       return {
@@ -136,6 +145,7 @@ const AdminDashboard = () => {
         latencyData: latencyRes.data,
         learningEffectivenessData: effectivenessRes.data,
         errorTypesData: errorTypesRes.data,
+        errorCategoriesData: errorCategoriesRes.data,
       };
     } catch (err) {
       console.error('Error fetching developer analytics:', err);
@@ -156,6 +166,7 @@ const AdminDashboard = () => {
       setLatencyData(analytics.latencyData);
       setLearningEffectivenessData(analytics.learningEffectivenessData);
       setErrorTypesData(analytics.errorTypesData);
+      setErrorCategoriesData(analytics.errorCategoriesData);
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -177,31 +188,33 @@ const AdminDashboard = () => {
   // Helper function to get the correct data structure for charts
   const getLatencyData = () => {
     if (viewMode === 'developer') {
-      // For single developer, use overall_latency array directly
       return latencyData.overall_latency || [];
     } else {
-      // For overall view, use overall_latency array
       return latencyData.overall_latency || [];
     }
   };
 
   const getLearningEffectivenessData = () => {
     if (viewMode === 'developer') {
-      // For single developer, use effectiveness array directly
       return learningEffectivenessData.effectiveness || [];
     } else {
-      // For overall view, use effectiveness array
       return learningEffectivenessData.effectiveness || [];
     }
   };
 
   const getErrorTypesData = () => {
     if (viewMode === 'developer') {
-      // For single developer, use overall_error_types array directly
       return errorTypesData.overall_error_types || [];
     } else {
-      // For overall view, use overall_error_types array
       return errorTypesData.overall_error_types || [];
+    }
+  };
+
+  const getErrorCategoriesData = () => {
+    if (viewMode === 'developer') {
+      return errorCategoriesData.overall_error_categories || [];
+    } else {
+      return errorCategoriesData.overall_error_categories || [];
     }
   };
 
@@ -320,6 +333,31 @@ const AdminDashboard = () => {
           '#36A2EB', // Medium
           '#FFCE56', // Low
           '#4BC0C0', // Unknown
+        ],
+        borderColor: '#ffffff',
+        borderWidth: 2,
+      },
+    ],
+  };
+
+  const errorCategoriesChartData = {
+    labels: getErrorCategoriesData().map((item) => item.category) || [],
+    datasets: [
+      {
+        label: 'Error Count',
+        data: getErrorCategoriesData().map((item) => item.count) || [],
+        backgroundColor: [
+          '#FF6384', // Syntax Error
+          '#36A2EB', // Runtime Error
+          '#FFCE56', // Logical Error
+          '#4BC0C0', // Performance Issue
+          '#9966FF', // Security Issue
+          '#FF9F40', // Code Style
+          '#4BC0C0', // Best Practice
+          '#C9CBCF', // Other Issue
+          '#FF6384', // Python Specific Error
+          '#36A2EB', // JavaScript Specific Error
+          '#FFCE56', // Java Specific Error
         ],
         borderColor: '#ffffff',
         borderWidth: 2,
@@ -608,9 +646,9 @@ const AdminDashboard = () => {
                 </div>
               </div>
 
-              {/* Error Types - Show for both views */}
+              {/* Error Types by Severity - Show for both views */}
               <div className="chart-card">
-                <h2>Error Types</h2>
+                <h2>Error Types by Severity</h2>
                 <div className="chart-container">
                   <Bar
                     data={errorTypesChartData}
@@ -626,6 +664,31 @@ const AdminDashboard = () => {
                       },
                     }}
                   />
+                </div>
+              </div>
+
+              {/* Error Categories - Show for both views */}
+              <div className="chart-card">
+                <h2>Error Categories</h2>
+                <div className="chart-container">
+                  <Bar
+                    data={errorCategoriesChartData}
+                    options={{
+                      ...chartOptions,
+                      plugins: {
+                        ...chartOptions.plugins,
+                        title: { display: true, text: 'Errors by Category' },
+                      },
+                      scales: {
+                        x: { title: { display: true, text: 'Error Category' } },
+                        y: { title: { display: true, text: 'Count' }, beginAtZero: true },
+                      },
+                    }}
+                  />
+                </div>
+                <div className="chart-stats">
+                  <p>Total Errors: {getErrorCategoriesData().reduce((sum, item) => sum + item.count, 0)}</p>
+                  <p>Most Common: {getErrorCategoriesData().length > 0 ? getErrorCategoriesData()[0].category : 'None'}</p>
                 </div>
               </div>
             </div>

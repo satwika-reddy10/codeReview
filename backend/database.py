@@ -73,6 +73,7 @@ class AISuggestion(Base):
     suggestion_id = Column(Integer)
     suggestion_text = Column(Text)
     severity = Column(String)  # New column for severity (High, Medium, Low)
+    error_category = Column(String)  # New column for error category
     language = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     file_path = Column(String, nullable=True)  # New column to track file path for repo files
@@ -84,6 +85,7 @@ class AcceptedSuggestion(Base):
     suggestion_id = Column(Integer)
     suggestion_text = Column(Text)
     modified_text = Column(Text)
+    error_category = Column(String)  # New column for error category
     language = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     file_path = Column(String, nullable=True)  # New column to track file path for repo files
@@ -95,6 +97,7 @@ class RejectedSuggestion(Base):
     suggestion_id = Column(Integer)
     suggestion_text = Column(Text)
     reject_reason = Column(String)
+    error_category = Column(String)  # New column for error category
     language = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     file_path = Column(String, nullable=True)  # New column to track file path for repo files
@@ -106,6 +109,7 @@ class ModifiedSuggestion(Base):
     suggestion_id = Column(Integer)
     original_text = Column(Text)
     modified_text = Column(Text)
+    error_category = Column(String)  # New column for error category
     language = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     file_path = Column(String, nullable=True)  # New column to track file path for repo files

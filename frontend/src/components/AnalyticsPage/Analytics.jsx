@@ -23,6 +23,7 @@ const Analytics = () => {
   const [latencyData, setLatencyData] = useState([]);
   const [learningEffectivenessData, setLearningEffectivenessData] = useState([]);
   const [errorTypesData, setErrorTypesData] = useState([]);
+  const [errorCategoriesData, setErrorCategoriesData] = useState([]);
   const [filters, setFilters] = useState({});
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -58,14 +59,16 @@ const Analytics = () => {
         accuracyRes,
         latencyRes,
         effectivenessRes,
-        errorTypesRes
+        errorTypesRes,
+        errorCategoriesRes
       ] = await Promise.all([
         axios.post('http://localhost:8000/analytics/suggestions', filters),
         axios.post('http://localhost:8000/analytics/trends', filters),
         axios.post('http://localhost:8000/analytics/detection-accuracy', filters),
         axios.post('http://localhost:8000/analytics/latency', filters),
         axios.post('http://localhost:8000/analytics/learning-effectiveness', filters),
-        axios.post('http://localhost:8000/analytics/error-types', filters)
+        axios.post('http://localhost:8000/analytics/error-types', filters),
+        axios.post('http://localhost:8000/analytics/error-categories', filters)
       ]);
 
       setSuggestionData(suggestionsRes.data);
@@ -74,6 +77,7 @@ const Analytics = () => {
       setLatencyData(latencyRes.data.overall_latency || []);
       setLearningEffectivenessData(effectivenessRes.data.effectiveness || []);
       setErrorTypesData(errorTypesRes.data.overall_error_types || []);
+      setErrorCategoriesData(errorCategoriesRes.data.overall_error_categories || []);
       
       setError(null);
     } catch (err) {
@@ -158,7 +162,7 @@ const Analytics = () => {
     ],
   };
 
-  // Bar chart for error types
+  // Bar chart for error types by severity
   const errorTypesChartData = {
     labels: errorTypesData?.map((item) => item.severity) || [],
     datasets: [
@@ -170,6 +174,32 @@ const Analytics = () => {
           '#36A2EB', // Medium  
           '#FFCE56', // Low
           '#4BC0C0', // Unknown
+        ],
+        borderColor: '#ffffff',
+        borderWidth: 2,
+      },
+    ],
+  };
+
+  // Bar chart for error categories
+  const errorCategoriesChartData = {
+    labels: errorCategoriesData?.map((item) => item.category) || [],
+    datasets: [
+      {
+        label: 'Error Count',
+        data: errorCategoriesData?.map((item) => item.count) || [],
+        backgroundColor: [
+          '#FF6384', // Syntax Error
+          '#36A2EB', // Runtime Error
+          '#FFCE56', // Logical Error
+          '#4BC0C0', // Performance Issue
+          '#9966FF', // Security Issue
+          '#FF9F40', // Code Style
+          '#4BC0C0', // Best Practice
+          '#C9CBCF', // Other Issue
+          '#FF6384', // Python Specific Error
+          '#36A2EB', // JavaScript Specific Error
+          '#FFCE56', // Java Specific Error
         ],
         borderColor: '#ffffff',
         borderWidth: 2,
@@ -391,9 +421,9 @@ const Analytics = () => {
             </div>
           </div>
 
-          {/* Error Types */}
+          {/* Error Types by Severity */}
           <div className="chart-card">
-            <h2>Error Types</h2>
+            <h2>Error Types by Severity</h2>
             <div className="chart-container">
               <Bar 
                 data={errorTypesChartData} 
@@ -423,6 +453,45 @@ const Analytics = () => {
                   }
                 }} 
               />
+            </div>
+          </div>
+
+          {/* Error Categories */}
+          <div className="chart-card">
+            <h2>Error Categories</h2>
+            <div className="chart-container">
+              <Bar 
+                data={errorCategoriesChartData} 
+                options={{
+                  ...chartOptions,
+                  plugins: {
+                    ...chartOptions.plugins,
+                    title: {
+                      display: true,
+                      text: 'Errors by Category'
+                    }
+                  },
+                  scales: {
+                    x: {
+                      title: {
+                        display: true,
+                        text: 'Error Category'
+                      }
+                    },
+                    y: {
+                      title: {
+                        display: true,
+                        text: 'Count'
+                      },
+                      beginAtZero: true
+                    }
+                  }
+                }} 
+              />
+            </div>
+            <div className="chart-stats">
+              <p>Total Errors: {errorCategoriesData.reduce((sum, item) => sum + item.count, 0)}</p>
+              <p>Most Common: {errorCategoriesData.length > 0 ? errorCategoriesData[0].category : 'None'}</p>
             </div>
           </div>
         </div>
