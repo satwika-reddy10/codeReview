@@ -3,7 +3,16 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from database import get_db # Changed from .database to database
+from fastapi.middleware.cors import CORSMiddleware
 import logging
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Or your frontend URL after deploy
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # FastAPI App
 app = FastAPI()
