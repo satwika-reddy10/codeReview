@@ -25,6 +25,40 @@ const SubmitPage = () => {
   const modifiedEditorRef = useRef(null);
   const suggestionsRef = useRef(null);
 
+  const formatSuggestionText = (text) => {
+    // Split by lines
+    const lines = text.split('\n');
+
+    return lines.map((line, index) => {
+      // Bold pattern: **text**
+      const boldRegex = /\*\*(.*?)\*\*/g;
+      const parts = [];
+      let lastIndex = 0;
+      let match;
+
+      while ((match = boldRegex.exec(line)) !== null) {
+        // Add text before bold
+        if (match.index > lastIndex) {
+          parts.push(line.substring(lastIndex, match.index));
+        }
+        // Add bold text
+        parts.push(<strong key={`${index}-${match.index}`}>{match[1]}</strong>);
+        lastIndex = match.index + match[0].length;
+      }
+
+      // Add remaining text
+      if (lastIndex < line.length) {
+        parts.push(line.substring(lastIndex));
+      }
+
+      return (
+        <div key={index} className="suggestion-line">
+          {parts.length > 0 ? parts : line}
+        </div>
+      );
+    });
+  };
+
   useEffect(() => {
     const timer = setTimeout(() => setAnimate(true), 100);
     // Get user_id from localStorage
@@ -178,11 +212,22 @@ const SubmitPage = () => {
       const data = await response.json();
       if (data.suggestions && data.suggestions.length > 0) {
         // Filter out introductory/summary text suggestions
-        const filteredSuggestions = data.suggestions.filter(s =>
-          !s.text.toLowerCase().includes('here are detailed suggestions') &&
-          !s.text.toLowerCase().includes('here are the suggestions') &&
-          s.text.trim().length > 0
-        );
+        // Filter out introductory/summary text suggestions and improved code sections
+        const filteredSuggestions = data.suggestions
+          .filter(s =>
+            !s.text.toLowerCase().includes('here are detailed suggestions') &&
+            !s.text.toLowerCase().includes('here are the suggestions') &&
+            s.text.trim().length > 0
+          )
+          .map(s => ({
+            ...s,
+            text: s.text
+              .replace(/\*\*Improved Code:\*\*[\s\S]*?(?=\*\*|$)/gi, '') // Remove improved code section
+              .replace(/\*\*Suggested Fix:\*\*[\s\S]*?(?=\*\*|$)/gi, '') // Remove suggested fix section
+              .replace(/Improved Code:[\s\S]*?(?=###|\*\*|$)/gi, '') // Remove improved code without bold
+              .replace(/Suggested Fix:[\s\S]*?(?=###|\*\*|$)/gi, '') // Remove suggested fix without bold
+              .trim()
+          }));
         setAiSuggestions(filteredSuggestions.length > 0 ? filteredSuggestions.map(s => ({ ...s, loadingAction: null })) : [{
           id: 1,
           text: 'No specific suggestions found. Your code looks good!',
@@ -267,6 +312,12 @@ const SubmitPage = () => {
             )
             .map((s) => ({
               ...s,
+              text: s.text
+                .replace(/\*\*Improved Code:\*\*[\s\S]*?(?=\*\*|$)/gi, '') // Remove improved code section
+                .replace(/\*\*Suggested Fix:\*\*[\s\S]*?(?=\*\*|$)/gi, '') // Remove suggested fix section
+                .replace(/Improved Code:[\s\S]*?(?=###|\*\*|$)/gi, '') // Remove improved code without bold
+                .replace(/Suggested Fix:[\s\S]*?(?=###|\*\*|$)/gi, '') // Remove suggested fix without bold
+                .trim(),
               file_path: review.file_path,
               language: review.language,
               loadingAction: null,
@@ -649,14 +700,9 @@ const SubmitPage = () => {
                     suggestions.map((suggestion) => (
                       <div key={`${suggestion.id}-${suggestion.file_path || 'null'}`} className="suggestion-item">
                         <div className="suggestion-text-container">
-                          <textarea
-                            value={suggestion.modifiedText || suggestion.text}
-                            onChange={(e) =>
-                              suggestion.status ? null : handleModifySuggestion(suggestion.id, suggestion.file_path, e.target.value)
-                            }
-                            className="suggestion-text"
-                            disabled={!!suggestion.status}
-                          />
+                          <div className="suggestion-text formatted">
+                            {formatSuggestionText(suggestion.text)}
+                          </div>
                           {suggestion.loadingAction === 'submit' && (
                             <span className="loader"></span>
                           )}
