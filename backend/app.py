@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 from database import get_db # Changed from .database to database
 import logging
 
-
 # FastAPI App
 app = FastAPI()
 
@@ -39,3 +38,8 @@ async def test_ai_connection():
         return {"status": "success", "response": result}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# Add a root endpoint to fix 404
+@app.get("/")
+async def read_root():
+    return {"message": "Welcome to CodeReview! App is running on Render!"}

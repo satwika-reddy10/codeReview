@@ -4,15 +4,15 @@ from sqlalchemy.dialects.postgresql import JSONB
 from datetime import datetime
 from typing import List, Optional
 import os
-from dotenv import load_dotenv
+# from dotenv import load_dotenv  # Removed since not needed in Render
 
-# Load environment variables
-load_dotenv()
+# Load environment variables (optional if not using .env locally)
+# load_dotenv()  # Comment out or remove if not needed locally
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:mypassword@localhost:5432/postgres"
-)
+# Use DATABASE_URL from environment, raise error if missing
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is not set")
 
 # Database Configuration
 connect_args = {"sslmode": "require"} if "supabase" in DATABASE_URL else {}
