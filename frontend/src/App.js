@@ -7,6 +7,8 @@ import SubmitPage from './components/SubmitPage/SubmitPage';
 import Analytics from './components/AnalyticsPage/Analytics';
 import AdminDashboard from './components/AnalyticsPage/AdminDashboard';
 
+// TEMP: Trigger Vercel redeploy with env var
+
 const router = createBrowserRouter([
   {
     path: '/',
